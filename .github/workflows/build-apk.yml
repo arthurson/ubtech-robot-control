@@ -54,35 +54,170 @@ jobs:
 
     - name: Install Python dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install buildozer cython==0.29.36
+        python -m pip install --upgrade pip setuptools wheel
+        pip install buildozer==1.5.0 cython==0.29.36 pillow
 
-    - name: Create assets directory
+    - name: Create assets directory and files
       run: |
         mkdir -p assets
-        # 创建临时占位图标
-        python3 -c "from PIL import Image; img = Image.new('RGB', (512, 512), '#2C3E50'); img.save('assets/icon.png')"
-        # 创建临时启动画面
-        python3 -c "from PIL import Image, ImageDraw, ImageFont; img = Image.new('RGB', (1024, 1024), '#2C3E50'); d = ImageDraw.Draw(img); d.text((512, 512), 'UBTECH', fill='white', font_size=100, anchor='mm'); img.save('assets/presplash.png')"
 
-    - name: Display buildozer version
+        # 检查并创建占位图标
+        if [ ! -f "assets/icon.png" ]; then
+          echo "Creating placeholder icon.png..."
+          python3 << 'EOF'
+from PIL import Image, ImageDraw, ImageFont
+import os
+
+try:
+    img = Image.new('RGB', (512, 512), '#2C3E50')
+    d = ImageDraw.Draw(img)
+
+    # 绘制圆形
+    d.ellipse([(50, 50), (462, 462)], fill='#3498DB')
+
+    # 绘制文字
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 150)
+    except:
+        font = ImageFont.load_default()
+
+    text = "UB"
+    bbox = d.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    position = ((512 - text_width) / 2, (512 - text_height) / 2)
+    d.text(position, text, fill='white', font=font)
+
+    img.save('assets/icon.png')
+    print("icon.png created successfully")
+except Exception as e:
+    print(f"Error creating icon: {e}")
+EOF
+        fi
+
+        # 检查并创建占位启动画面
+        if [ ! -f "assets/presplash.png" ]; then
+          echo "Creating placeholder presplash.png..."
+          python3 << 'EOF'
+from PIL import Image, ImageDraw, ImageFont
+
+try:
+    img = Image.new('RGB', (1024, 1024), '#2C3E50')
+    d = ImageDraw.Draw(img)
+
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 100)
+    except:
+        font = ImageFont.load_default()
+
+    text = "UBTECH Robot"
+    bbox = d.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    position = ((1024 - text_width) / 2, (1024 - text_height) / 2)
+    d.text(position, text, fill='white', font=font)
+
+    img.save('assets/presplash.png')
+    print("presplash.png created successfully")
+except Exception as e:
+    print(f"Error creating presplash: {e}")
+EOF
+        fi
+
+        # 验证文件创建
+        ls -lh assets/
+
+    - name: Verify buildozer.spec
+      run: |
+        if [ -f "buildozer.spec" ]; then
+          echo "buildozer.spec found"
+          head -20 buildozer.spec
+        else
+          echo "ERROR: buildozer.spec not found!"
+          exit 1
+        fi
+
+    - name: Initialize buildozer
+      run: |
+        buildozer init --help || echo "buildozer command available"
+
+    - name: Display buildozer info
       run: |
         buildozer --version
+        buildozer android show || echo "buildozer android show failed"
 
-    - name: Build APK (Debug)
+    - name: Check Python files
       run: |
-        timeout 120m buildozer android debug || echo "Build completed with possible warnings"
+        echo "Checking main Python files..."
+        ls -lh android_main.py android_robot_interface.py 2>/dev/null || echo "Some files missing"
 
-    - name: Check if APK was built
+        if [ -f "android_main.py" ]; then
+          echo "android_main.py exists"
+          head -20 android_main.py
+        fi
+
+    - name: Create minimal test spec (if needed)
       run: |
-        find . -name "*.apk" -type f
-        ls -lh bin/ 2>/dev/null || echo "No bin directory"
+        # 创建一个简化的测试配置，避免复杂配置问题
+        if [ ! -f "buildozer.spec" ]; then
+          echo "Creating minimal buildozer.spec..."
+          cat > buildozer.spec << 'EOF'
+[app]
+title = 优必选小微控制
+package.name = ubtech_robot_control
+package.domain = org.ubtech
+source.dir = .
+source.include_exts = py,png,jpg,kv,json
+version = 1.0.0
+requirements = python3,kivy,kivymd,pyjnius,android,plyer,requests
+presplash.filename = assets/presplash.png
+icon.filename = assets/icon.png
+orientation = portrait
+fullscreen = 0
+android.presplash_color = #2C3E50
+android.permissions = BLUETOOTH,BLUETOOTH_ADMIN,INTERNET,RECORD_AUDIO,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE
+android.api = 31
+android.minapi = 21
+android.ndk = 25b
+android.sdk = 31
+android.archs = arm64-v8a
+android.neon = 1
+p4a.bootstrap = sdl2
+python.version = 3.9
+EOF
+        fi
 
-    - name: Upload APK artifacts
+    - name: Build APK with verbose output
+      run: |
+        echo "Starting APK build..."
+        export PATH="/usr/lib/jvm/java-11-openjdk-amd64/bin:$PATH"
+        timeout 120m buildozer -v android debug || echo "Build completed with exit code $?"
+
+    - name: Check build output
+      run: |
+        echo "=== Checking for APK files ==="
+        find . -name "*.apk" -type f -ls 2>/dev/null || echo "No APK files found"
+
+        echo ""
+        echo "=== Checking bin directory ==="
+        ls -lah bin/ 2>/dev/null || echo "bin directory not found"
+
+        echo ""
+        echo "=== Checking .buildozer directory ==="
+        ls -lah .buildozer/ 2>/dev/null || echo ".buildozer not found"
+
+        echo ""
+        echo "=== Checking for build logs ==="
+        find . -name "*.log" -type f 2>/dev/null || echo "No log files found"
+
+    - name: Upload APK if exists
       uses: actions/upload-artifact@v4
+      if: always()
       with:
-        name: ubtech-robot-control-debug-apk
-        path: bin/*.apk
+        name: ubtech-robot-control-apk
+        path: |
+          bin/*.apk
+          ./*.apk
         retention-days: 30
         if-no-files-found: warn
 
@@ -94,12 +229,34 @@ jobs:
         path: |
           .buildozer/
           buildozer.log
+          *.log
         retention-days: 7
-        if-no-files-found: warn
+        if-no-files-found: ignore
 
     - name: Create summary
-      if: success()
+      if: always()
       run: |
-        echo "## APK Build Complete! 🎉" >> $GITHUB_STEP_SUMMARY
+        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "Download the APK from the Artifacts section below." >> $GITHUB_STEP_SUMMARY
+
+        # 检查是否有APK
+        APK_COUNT=$(find . -name "*.apk" -type f 2>/dev/null | wc -l)
+        echo "APK Files Found: $APK_COUNT" >> $GITHUB_STEP_SUMMARY
+
+        if [ $APK_COUNT -gt 0 ]; then
+          echo "✅ **APK Generated Successfully!**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Download the APK from the Artifacts section below." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### APK Details:" >> $GITHUB_STEP_SUMMARY
+          find . -name "*.apk" -type f -exec ls -lh {} \; | awk '{print "- **" $9 "**: " $5}' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **APK Build Failed**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please check the build logs in the Artifacts section for details." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Troubleshooting:" >> $GITHUB_STEP_SUMMARY
+          echo "- Check the build-logs artifact" >> $GITHUB_STEP_SUMMARY
+          echo "- Review the failed step in this workflow" >> $GITHUB_STEP_SUMMARY
+          echo "- Ensure all required files are present" >> $GITHUB_STEP_SUMMARY
+        fi
