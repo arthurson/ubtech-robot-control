@@ -4,8 +4,6 @@ on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
-  pull_request:
-    branches: [ main, master ]
 
 jobs:
   build:
@@ -16,15 +14,36 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.9'
-        cache: 'pip'
 
-    - name: Install system dependencies
+    - name: Install buildozer dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential git ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev zlib1g-dev libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good autoconf libtool pkg-config libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev openjdk-11-jdk python3-pil
+        sudo apt-get install -y \
+          build-essential \
+          git \
+          ffmpeg \
+          libsdl2-dev \
+          libsdl2-image-dev \
+          libsdl2-mixer-dev \
+          libsdl2-ttf-dev \
+          libportmidi-dev \
+          libswscale-dev \
+          libavformat-dev \
+          libavcodec-dev \
+          zlib1g-dev \
+          autoconf \
+          libtool \
+          pkg-config \
+          automake \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libtinfo5 \
+          cmake \
+          libopenjp2-7 \
+          libtiff5
 
     - name: Install Python dependencies
       run: |
@@ -37,97 +56,92 @@ jobs:
 
         if [ ! -f "assets/icon.png" ]; then
           python3 << 'PYEOF'
-from PIL import Image, ImageDraw, ImageFont
-try:
-    img = Image.new('RGB', (512, 512), '#2C3E50')
-    d = ImageDraw.Draw(img)
-    d.ellipse([(50, 50), (462, 462)], fill='#3498DB')
-    try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 150)
-    except:
-        font = ImageFont.load_default()
-    text = "UB"
-    bbox = d.textbbox((0, 0), text, font=font)
-    text_width = bbox[2] - bbox[0]
-    text_height = bbox[3] - bbox[1]
-    position = ((512 - text_width) / 2, (512 - text_height) / 2)
-    d.text(position, text, fill='white', font=font)
-    img.save('assets/icon.png')
-except Exception as e:
-    print(f"Error: {e}")
-PYEOF
+          from PIL import Image, ImageDraw, ImageFont
+          try:
+              img = Image.new('RGB', (512, 512), '#2C3E50')
+              d = ImageDraw.Draw(img)
+              d.ellipse([(50, 50), (462, 462)], fill='#3498DB')
+              try:
+                  font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 150)
+              except:
+                  font = ImageFont.load_default()
+              text = "UB"
+              bbox = d.textbbox((0, 0), text, font=font)
+              text_width = bbox[2] - bbox[0]
+              text_height = bbox[3] - bbox[1]
+              position = ((512 - text_width) // 2, (512 - text_height) // 2)
+              d.text(position, text, fill='white', font=font)
+              img.save('assets/icon.png')
+              print("Created icon.png")
+          except Exception as e:
+              print(f"Error creating icon: {e}")
+              img = Image.new('RGB', (512, 512), '#3498DB')
+              img.save('assets/icon.png')
+          PYEOF
         fi
 
         if [ ! -f "assets/presplash.png" ]; then
           python3 << 'PYEOF'
-from PIL import Image, ImageDraw, ImageFont
-try:
-    img = Image.new('RGB', (1024, 1024), '#2C3E50')
-    d = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 100)
-    except:
-        font = ImageFont.load_default()
-    text = "UBTECH Robot"
-    bbox = d.textbbox((0, 0), text, font=font)
-    text_width = bbox[2] - bbox[0]
-    text_height = bbox[3] - bbox[1]
-    position = ((1024 - text_width) / 2, (1024 - text_height) / 2)
-    d.text(position, text, fill='white', font=font)
-    img.save('assets/presplash.png')
-except Exception as e:
-    print(f"Error: {e}")
-PYEOF
+          from PIL import Image, ImageDraw, ImageFont
+          try:
+              img = Image.new('RGB', (512, 512), '#2C3E50')
+              d = ImageDraw.Draw(img)
+              try:
+                  font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 80)
+              except:
+                  font = ImageFont.load_default()
+              text = "优必选机器人控制"
+              bbox = d.textbbox((0, 0), text, font=font)
+              text_width = bbox[2] - bbox[0]
+              text_height = bbox[3] - bbox[1]
+              position = ((512 - text_width) // 2, (512 - text_height) // 2)
+              d.text(position, text, fill='white', font=font)
+              img.save('assets/presplash.png')
+              print("Created presplash.png")
+          except Exception as e:
+              print(f"Error creating presplash: {e}")
+              img = Image.new('RGB', (512, 512), '#34495E')
+              img.save('assets/presplash.png')
+          PYEOF
         fi
 
-        ls -lh assets/
+        echo "Assets created successfully"
+        ls -la assets/
 
-    - name: Verify buildozer.spec
+    - name: Download SDK and NDK
       run: |
-        if [ -f "buildozer.spec" ]; then
-          echo "buildozer.spec found"
-          head -20 buildozer.spec
-        else
-          echo "ERROR: buildozer.spec not found!"
-          exit 1
+        echo "Checking for cached dependencies..."
+        mkdir -p ~/.buildozer
+        if [ ! -d "~/.buildozer/android/platform/android-sdk" ]; then
+          echo "SDK will be downloaded by buildozer"
         fi
 
-    - name: Display buildozer info
+    - name: Initialize buildozer
       run: |
-        buildozer --version
-        buildozer android show || echo "buildozer android show failed"
-
-    - name: Check Python files
-      run: |
-        echo "Checking main Python files..."
-        ls -lh android_main.py android_robot_interface.py 2>/dev/null || echo "Some files missing"
-
-        if [ -f "android_main.py" ]; then
-          echo "android_main.py exists"
-          head -20 android_main.py
-        fi
+        buildozer init
+        buildozer android clean
 
     - name: Build APK
       run: |
-        export PATH="/usr/lib/jvm/java-11-openjdk-amd64/bin:$PATH"
-        timeout 120m buildozer -v android debug || echo "Build completed with exit code $?"
+        buildozer -v android debug 2>&1 | tee build.log
 
-    - name: Check build output
+    - name: Check APK exists
       run: |
-        echo "=== Checking for APK files ==="
-        find . -name "*.apk" -type f -ls 2>/dev/null || echo "No APK files found"
-        echo ""
-        echo "=== Checking bin directory ==="
-        ls -lah bin/ 2>/dev/null || echo "bin directory not found"
+        if [ -f "bin/*.apk" ]; then
+          echo "APK build successful!"
+          ls -lh bin/
+        else
+          echo "APK build failed!"
+          tail -n 100 build.log
+          exit 1
+        fi
 
-    - name: Upload APK if exists
+    - name: Upload APK artifact
       uses: actions/upload-artifact@v4
-      if: always()
       with:
-        name: ubtech-robot-control-apk
+        name: ubtech-robot-control-debug-apk
         path: bin/*.apk
         retention-days: 30
-        if-no-files-found: warn
 
     - name: Upload build logs
       uses: actions/upload-artifact@v4
@@ -135,26 +149,6 @@ PYEOF
       with:
         name: build-logs
         path: |
-          .buildozer/
-          buildozer.log
+          build.log
+          .buildozer/logs/
         retention-days: 7
-        if-no-files-found: ignore
-
-    - name: Create summary
-      if: always()
-      run: |
-        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-
-        APK_COUNT=$(find . -name "*.apk" -type f 2>/dev/null | wc -l)
-        echo "APK Files Found: $APK_COUNT" >> $GITHUB_STEP_SUMMARY
-
-        if [ $APK_COUNT -gt 0 ]; then
-          echo "✅ **APK Generated Successfully!**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Download the APK from the Artifacts section below." >> $GITHUB_STEP_SUMMARY
-        else
-          echo "❌ **APK Build Failed**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Please check the build logs for details." >> $GITHUB_STEP_SUMMARY
-        fi
