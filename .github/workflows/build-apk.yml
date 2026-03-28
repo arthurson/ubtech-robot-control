@@ -1,18 +1,29 @@
-name: Build Android APK (Minimal)
+name: Build Android APK (Fixed)
 
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
+    inputs:
+      debug:
+        description: 'Debug build'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   build:
     runs-on: ubuntu-20.04
     timeout-minutes: 120
+    
+    env:
+      DEBIAN_FRONTEND: noninteractive
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -20,74 +31,83 @@ jobs:
         python-version: '3.9'
         cache: 'pip'
 
+    # 緩存 Buildozer 環境，避免重複下載 SDK/NDK（這是解決卡頓的關鍵）
+    - name: Cache Buildozer
+      uses: actions/cache@v4
+      id: cache-buildozer
+      with:
+        path: |
+          ~/.buildozer
+          .buildozer
+        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
+        restore-keys: |
+          ${{ runner.os }}-buildozer-
+
     - name: Install system packages
       run: |
         sudo apt-get update -qq
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential git ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev zlib1g-dev autoconf libtool pkg-config automake libncurses5-dev libncursesw5-dev libtinfo5 cmake libopenjp2-7 libtiff5 openjdk-17-jdk zip unzip
+        sudo apt-get install -y \
+          build-essential git \
+          ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+          libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
+          zlib1g-dev autoconf libtool pkg-config automake \
+          libncurses5-dev libncursesw5-dev libtinfo5 cmake \
+          libopenjp2-7 libtiff5 \
+          openjdk-17-jdk zip unzip \
+          wget curl
+        sudo apt-get clean
 
     - name: Install Python packages
       run: |
-        pip install --upgrade pip setuptools wheel
+        python -m pip install --upgrade pip setuptools wheel
         pip install buildozer==1.5.0 cython==0.29.36 pillow
 
     - name: Create assets
       run: |
         mkdir -p assets
-        python3 << 'PYEOF'
-        import sys
-        try:
-            from PIL import Image
-            img = Image.new('RGB', (512, 512), (44, 62, 80))
-            img.save('assets/icon.png')
-            img = Image.new('RGB', (512, 512), (52, 73, 94))
-            img.save('assets/presplash.png')
-            print("Assets created successfully")
-            sys.exit(0)
-        except Exception as e:
-            print(f"Error: {e}")
-            import base64
-            import os
-            for filename in ['icon.png', 'presplash.png']:
-                with open(f'assets/{filename}', 'wb') as f:
-                    f.write(base64.b64decode(b'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='))
-            print("Created placeholder assets")
-            sys.exit(0)
-        PYEOF
+        python3 << 'EOF'
+        from PIL import Image
+        img = Image.new('RGB', (512, 512), (44, 62, 80))
+        img.save('assets/icon.png')
+        img = Image.new('RGB', (512, 512), (52, 73, 94))
+        img.save('assets/presplash.png')
+        print("Assets created")
+        EOF
 
-    - name: Verify buildozer.spec
+    # 修復 buildozer.spec 配置
+    - name: Fix buildozer.spec
       run: |
-        if [ -f "buildozer.spec" ]; then
-          echo "buildozer.spec exists"
-          head -20 buildozer.spec
-        else
-          echo "Warning: buildozer.spec not found, will use defaults"
+        # 確保 spec 文件存在
+        if [ ! -f "buildozer.spec" ]; then
+          buildozer init
         fi
+        
+        # 使用 sed 修改關鍵配置，避免交互提示
+        sed -i 's/^#\?log_level =.*/log_level = 2/' buildozer.spec
+        sed -i 's/^#\?android.accept_sdk_license =.*/android.accept_sdk_license = True/' buildozer.spec
+        sed -i 's/^#\?android.api =.*/android.api = 30/' buildozer.spec
+        sed -i 's/^#\?android.minapi =.*/android.minapi = 21/' buildozer.spec
+        sed -i 's/^#\?android.ndk =.*/android.ndk = 23b/' buildozer.spec
+        sed -i 's/^#\?android.sdk =.*/android.sdk = 30/' buildozer.spec
+        
+        # 添加必要的權限
+        if ! grep -q "android.permissions" buildozer.spec; then
+          echo "android.permissions = INTERNET, BLUETOOTH, BLUETOOTH_ADMIN, ACCESS_NETWORK_STATE, RECORD_AUDIO" >> buildozer.spec
+        fi
+        
+        echo "=== buildozer.spec 修復完成 ==="
+        cat buildozer.spec
 
-    - name: Run buildozer init
-      run: |
-        buildozer init || echo "Init skipped, using existing spec"
-
+    # 構建 APK - 這是核心步驟，使用非交互模式
     - name: Build APK
       run: |
-        buildozer android debug --verbose 2>&1 | tee build-full.log
-
-    - name: Check build result
-      if: always()
-      run: |
-        echo "=== Checking for APK ==="
-        find . -name "*.apk" -type f 2>/dev/null || true
-        if [ -f "bin/*.apk" ]; then
-          echo "APK found in bin/"
-          ls -lh bin/*.apk
-        elif [ -d "bin" ]; then
-          echo "bin/ exists but no APK found:"
-          ls -la bin/
-        else
-          echo "bin/ directory not found"
-        fi
-        echo ""
-        echo "=== Last 50 lines of build log ==="
-        tail -50 build-full.log
+        # 清理可能殘留的鎖文件
+        rm -f .buildozer/.lock || true
+        
+        # 直接運行，不等待輸入
+        buildozer android debug 2>&1 | tee build.log
+        
+        echo "Build finished with exit code: $?"
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
@@ -97,12 +117,22 @@ jobs:
           bin/*.apk
           **/*.apk
         retention-days: 30
-        if-no-files-found: ignore
+        if-no-files-found: warn
 
     - name: Upload build log
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: complete-build-log
-        path: build-full.log
+        name: build-log
+        path: build.log
         retention-days: 14
+
+    # 顯示構建結果
+    - name: Show result
+      if: always()
+      run: |
+        echo "=== 查找 APK 文件 ==="
+        find . -name "*.apk" -type f 2>/dev/null || echo "未找到 APK"
+        echo ""
+        echo "=== bin 目錄內容 ==="
+        ls -la bin/ 2>/dev/null || echo "bin 目錄不存在"
