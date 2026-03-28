@@ -14,16 +14,12 @@ jobs:
       with:
         fetch-depth: 0
     
-    # 验证配置文件内容
+    # 验证配置文件
     - name: 验证 buildozer.spec
       run: |
-        echo "=== buildozer.spec 完整内容 ==="
-        cat buildozer.spec
-        echo "==============================="
-        echo ""
-        echo "=== requirements 行 ==="
+        echo "=== buildozer.spec 中的 requirements ==="
         grep "^requirements" buildozer.spec || echo "未找到 requirements 行"
-        echo "========================"
+        echo "========================================="
     
     - name: 设置 Python
       uses: actions/setup-python@v5
@@ -51,74 +47,74 @@ jobs:
           libssl-dev \
           python3-dev
     
-    - name: 安装 Buildozer
+    - name: 安装 Buildozer 和 Cython
       run: |
         pip install --upgrade pip
         pip install buildozer cython
     
-    # 清理所有缓存，强制重新读取配置
+    # 关键：手动安装 Android SDK build-tools
+    - name: 安装 Android SDK Build Tools
+      run: |
+        # 创建 SDK 目录
+        mkdir -p /home/runner/.buildozer/android/platform/android-sdk
+        
+        # 使用 sdkmanager 安装 build-tools
+        export ANDROID_HOME=/home/runner/.buildozer/android/platform/android-sdk
+        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/tools/bin
+        
+        # 下载 command line tools
+        cd /home/runner/.buildozer/android/platform
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+        unzip -q commandlinetools-linux-9477386_latest.zip
+        mkdir -p android-sdk/cmdline-tools
+        mv cmdline-tools android-sdk/cmdline-tools/latest
+        
+        # 设置环境变量并安装 build-tools
+        export ANDROID_HOME=/home/runner/.buildozer/android/platform/android-sdk
+        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+        
+        # 接受许可证
+        yes | sdkmanager --licenses > /dev/null 2>&1 || true
+        
+        # 安装 build-tools (版本 30.0.3 是 Android API 30 对应的)
+        sdkmanager "build-tools;30.0.3" "platforms;android-30"
+        
+        echo "Build tools 安装完成"
+        ls -la $ANDROID_HOME/build-tools/
+    
+    # 清理缓存
     - name: 清理构建缓存
       run: |
-        rm -rf .buildozer
+        rm -rf .buildozer/.lock
         rm -rf bin
-        rm -f .buildozer.spec.lock
     
-    # 手动创建必要的目录
-    - name: 创建目录结构
-      run: |
-        mkdir -p .buildozer
-        mkdir -p bin
-    
-    # 确保有 main.py 入口文件
+    # 确保有 main.py
     - name: 检查入口文件
       run: |
         if [ ! -f "main.py" ]; then
           if [ -f "android_main.py" ]; then
-            echo "复制 android_main.py 到 main.py"
             cp android_main.py main.py
+            echo "已复制 android_main.py 到 main.py"
           else
-            echo "错误: 找不到 main.py 或 android_main.py"
+            echo "错误: 找不到 main.py"
             exit 1
           fi
         fi
-        echo "入口文件: main.py"
-        ls -la main.py
     
-    # 直接使用 buildozer 构建
+    # 构建 APK
     - name: 构建 APK
       run: |
         buildozer -v android debug 2>&1 | tee build_log.txt
     
-    # 显示构建日志的最后部分
-    - name: 显示构建结果
-      if: always()
-      run: |
-        echo "=== 构建日志最后 100 行 ==="
-        tail -100 build_log.txt
-        echo "==========================="
-    
-    # 查找 APK
-    - name: 查找并上传 APK
-      if: success()
-      run: |
-        echo "=== 查找 APK 文件 ==="
-        find . -name "*.apk" -type f
-        if [ -d "bin" ]; then
-          ls -la bin/
-        fi
-      continue-on-error: true
-    
+    # 上传 APK
     - name: 上传 APK
       uses: actions/upload-artifact@v4
       if: success()
       with:
         name: ubtech-robot-apk
-        path: |
-          bin/*.apk
-          *.apk
-      continue-on-error: true
+        path: bin/*.apk
     
-    # 如果失败，上传构建日志
+    # 上传日志（如果失败）
     - name: 上传构建日志
       uses: actions/upload-artifact@v4
       if: failure()
