@@ -10,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     
-    # 使用預配置好的 Kivy Buildozer Docker 鏡像
     container:
       image: kivy/buildozer:latest
       options: --user root
@@ -37,52 +36,56 @@ jobs:
         print('圖標已創建')
         "
 
-    - name: 配置 buildozer.spec
+    - name: 清理並配置 buildozer.spec
       run: |
-        # 如果沒有 spec 文件則創建
-        if [ ! -f "buildozer.spec" ]; then
-          buildozer init
+        # 備份原始 spec（如果存在）
+        if [ -f "buildozer.spec" ]; then
+          cp buildozer.spec buildozer.spec.bak
         fi
         
-        # 設置 Android SDK 許可證自動接受
-        sed -i 's/^#\?android.accept_sdk_license.*/android.accept_sdk_license = True/' buildozer.spec
+        # 創建全新的 spec 文件，避免重複配置
+        cat > buildozer.spec << 'EOF'
+[app]
+
+title = UBTechRobot
+package.name = ubtechrobot
+package.domain = org.ubtech
+
+source.dir = .
+source.include_exts = py,png,jpg,kv,atlas
+version = 1.0.0
+requirements = python3,kivy
+
+orientation = portrait
+osx.python_version = 3
+osx.kivy_version = 2.2.1
+fullscreen = 0
+
+android.accept_sdk_license = True
+android.ndk = 25b
+android.api = 30
+android.minapi = 21
+android.permissions = INTERNET, BLUETOOTH, BLUETOOTH_ADMIN, ACCESS_NETWORK_STATE, RECORD_AUDIO
+
+log_level = 2
+warn_on_root = 0
+
+[buildozer]
+
+log_level = 2
+warn_on_root = 1
+EOF
         
-        # 設置 NDK 版本（使用 25b，穩定兼容）
-        sed -i 's/^#\?android.ndk.*/android.ndk = 25b/' buildozer.spec
-        
-        # 設置 Android API 版本
-        sed -i 's/^#\?android.api.*/android.api = 30/' buildozer.spec
-        sed -i 's/^#\?android.minapi.*/android.minapi = 21/' buildozer.spec
-        
-        # 設置日誌級別（方便調試）
-        sed -i 's/^#\?log_level.*/log_level = 2/' buildozer.spec
-        
-        # 應用名稱（避免中文導致問題）
-        sed -i 's/^title =.*/title = UBTechRobot/' buildozer.spec
-        sed -i 's/^package.name =.*/package.name = ubtechrobot/' buildozer.spec
-        sed -i 's/^package.domain =.*/package.domain = org.ubtech/' buildozer.spec
-        
-        # 添加必要的 Android 權限
-        if ! grep -q "android.permissions" buildozer.spec; then
-          echo "android.permissions = INTERNET, BLUETOOTH, BLUETOOTH_ADMIN, ACCESS_NETWORK_STATE, RECORD_AUDIO" >> buildozer.spec
-        fi
-        
-        # 設置源文件擴展名
-        sed -i 's/^#\?source.include_exts =.*/source.include_exts = py,png,jpg,kv,atlas/' buildozer.spec
-        
-        # 設置 requirements（簡化版本，先確保能構建）
-        sed -i 's/^#\?requirements =.*/requirements = python3,kivy/' buildozer.spec
-        
-        # 指定 Android 入口文件
+        # 如果存在 android_main.py 則設置入口點
         if [ -f "android_main.py" ]; then
-          sed -i 's/^#\?android.entrypoint =.*/android.entrypoint = android_main.py/' buildozer.spec
+          echo "android.entrypoint = android_main.py" >> buildozer.spec
         fi
         
         echo ""
         echo "========== buildozer.spec 配置完成 =========="
         cat buildozer.spec
 
-    - name: 顯示項目文件結構（調試用）
+    - name: 顯示項目文件結構
       run: |
         echo "=== 項目根目錄 ==="
         ls -la
@@ -90,11 +93,11 @@ jobs:
         echo "=== assets 目錄 ==="
         ls -la assets/ || echo "無"
         echo ""
-        echo "=== 檢查入口文件 ==="
+        echo "=== 入口文件 ==="
         if [ -f "android_main.py" ]; then
           echo "✅ android_main.py 存在"
         elif [ -f "main.py" ]; then
-          echo "⚠️ 使用 main.py 作為入口"
+          echo "⚠️ 使用 main.py"
         else
           echo "❌ 找不到入口文件"
         fi
@@ -103,7 +106,6 @@ jobs:
       run: |
         echo "開始構建 APK..."
         buildozer android debug 2>&1 | tee build.log
-        echo ""
         echo "構建完成，退出碼: $?"
 
     - name: 上傳構建日誌
@@ -117,35 +119,28 @@ jobs:
     - name: 查找並上傳 APK
       id: upload_apk
       run: |
-        echo "=== 查找 APK 文件 ==="
-        
-        # 查找所有 APK
+        echo "=== 查找 APK ==="
         APK_FILES=$(find . -name "*.apk" -type f 2>/dev/null)
         
         if [ -n "$APK_FILES" ]; then
           echo "✅ 找到 APK:"
           echo "$APK_FILES"
-          echo ""
-          echo "=== APK 詳細信息 ==="
           for apk in $APK_FILES; do
             ls -lh "$apk"
           done
-          
-          # 複製到 bin 目錄
           mkdir -p bin
           for apk in $APK_FILES; do
             cp "$apk" bin/
           done
-          
           echo "apk_found=true" >> $GITHUB_OUTPUT
         else
-          echo "❌ 未找到 APK 文件"
+          echo "❌ 未找到 APK"
           echo ""
-          echo "=== bin 目錄內容 ==="
-          ls -la bin/ 2>/dev/null || echo "bin 目錄不存在"
+          echo "=== bin 目錄 ==="
+          ls -la bin/ 2>/dev/null || echo "無"
           echo ""
-          echo "=== .buildozer 目錄內容 ==="
-          find .buildozer -name "*.apk" 2>/dev/null || echo "無 APK"
+          echo "=== .buildozer 目錄中的 APK ==="
+          find .buildozer -name "*.apk" 2>/dev/null || echo "無"
           echo "apk_found=false" >> $GITHUB_OUTPUT
         fi
 
@@ -163,17 +158,7 @@ jobs:
       with:
         tag_name: "v1.0.${{ github.run_number }}"
         name: "UBTech Robot Control v1.0.${{ github.run_number }}"
-        body: |
-          ## 自動構建版本
-          
-          - 構建時間: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          - 提交: ${{ github.sha }}
-          
-          ### 功能說明
-          - 運動控制
-          - 語音交互
-          - 編程教學
-          - 遠程監控
+        body: "自動構建版本 - 提交: ${{ github.sha }}"
         files: bin/*.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -181,6 +166,7 @@ jobs:
     - name: 構建失敗通知
       if: steps.upload_apk.outputs.apk_found != 'true'
       run: |
-        echo "❌ 構建失敗"
+        echo "❌ 構建失敗，請下載 build-log 查看詳細錯誤"
         echo ""
-        echo "請下載 build-log artifact 查看詳細錯誤信息"
+        echo "=== 最後 50 行日誌 ==="
+        tail -50 build.log 2>/dev/null || echo "無日誌"
