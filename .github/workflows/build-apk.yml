@@ -26,7 +26,7 @@ jobs:
         path: |
           ~/.buildozer
           .buildozer
-        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec', 'requirements_android.txt') }}
+        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
         restore-keys: |
           ${{ runner.os }}-buildozer-
 
@@ -43,7 +43,6 @@ jobs:
           openjdk-17-jdk zip unzip \
           wget curl
         sudo apt-get install -y libtinfo6 libtiff6 || true
-        echo "系統依賴安裝完成"
 
     - name: 安裝 Python 打包工具
       run: |
@@ -59,68 +58,63 @@ jobs:
         img.save('assets/icon.png')
         img = Image.new('RGB', (512, 512), (52, 73, 94))
         img.save('assets/presplash.png')
-        print('已生成佔位圖標')
+        print('圖標已創建')
         "
 
-    # 關鍵修復：預先接受 Android SDK 許可證
     - name: 預先接受 Android SDK 許可證
       run: |
-        mkdir -p ~/.android
-        echo -n "24333f8a63b6825ea9c5514f83c2829b004d1fee" > ~/.android/adbkey
-        touch ~/.android/repositories.cfg
-        # 創建許可證接受文件
         mkdir -p ~/.android/licenses
         echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > ~/.android/licenses/android-sdk-license
         echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > ~/.android/licenses/android-sdk-preview-license
         echo "84831b9409646a918e30573bab4c9c91346d8abd" > ~/.android/licenses/google-gdk-license
-        echo "許可證已預先接受"
 
-    - name: 配置 buildozer.spec
+    - name: 配置 buildozer.spec (關鍵修復)
       run: |
+        # 如果沒有 spec 文件則創建
         if [ ! -f "buildozer.spec" ]; then
           buildozer init
         fi
         
-        # 強制設置許可證接受
+        # 清除舊的 NDK 配置
+        sed -i '/^android.ndk/d' buildozer.spec
+        
+        # 使用 NDK 25b（最低要求版本）
+        echo "android.ndk = 25b" >> buildozer.spec
+        
+        # 確保許可證接受
         sed -i '/^android.accept_sdk_license/d' buildozer.spec
         echo "android.accept_sdk_license = True" >> buildozer.spec
         
-        # 設置 API 版本（使用較舊但穩定的版本）
+        # API 版本設置
         sed -i '/^android.api/d' buildozer.spec
         sed -i '/^android.minapi/d' buildozer.spec
         echo "android.api = 30" >> buildozer.spec
         echo "android.minapi = 21" >> buildozer.spec
         
-        # 使用特定的 NDK 版本
-        sed -i '/^android.ndk/d' buildozer.spec
-        echo "android.ndk = 23b" >> buildozer.spec
-        
-        # 設置日誌級別
+        # 日誌級別
         sed -i '/^log_level/d' buildozer.spec
         echo "log_level = 2" >> buildozer.spec
+        
+        # 應用名稱（避免中文問題）
+        sed -i 's/^title =.*/title = UBTechRobot/' buildozer.spec
+        sed -i 's/^package.name =.*/package.name = ubtechrobot/' buildozer.spec
         
         # 添加權限
         if ! grep -q "android.permissions" buildozer.spec; then
           echo "android.permissions = INTERNET, BLUETOOTH, BLUETOOTH_ADMIN, ACCESS_NETWORK_STATE, RECORD_AUDIO" >> buildozer.spec
         fi
         
-        # 設置應用名稱（避免中文問題）
-        sed -i 's/^title =.*/title = UBTechRobot/' buildozer.spec
-        sed -i 's/^package.name =.*/package.name = ubtechrobot/' buildozer.spec
-        
-        echo "========== buildozer.spec 配置完成 =========="
+        echo "========== buildozer.spec 配置 =========="
         cat buildozer.spec
 
     - name: 構建 APK
-      id: build
       run: |
         rm -f .buildozer/.lock || true
-        # 設置環境變量避免交互
+        # 設置環境變量
         export JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
         export PATH=$JAVA_HOME/bin:$PATH
-        
+        # 構建
         buildozer android debug 2>&1 | tee build.log
-        echo "構建命令執行完畢，退出碼: $?"
 
     - name: 上傳構建日誌
       if: always()
@@ -130,34 +124,26 @@ jobs:
         path: build.log
         retention-days: 7
 
-    - name: 檢查構建輸出
-      if: always()
-      run: |
-        echo "=== 查找 APK 文件 ==="
-        find . -name "*.apk" -type f 2>/dev/null || echo "未找到 APK"
-        echo "=== bin 目錄 ==="
-        ls -la bin/ 2>/dev/null || echo "bin 目錄不存在"
-        echo "=== .buildozer 最後狀態 ==="
-        ls -la .buildozer/ 2>/dev/null || echo "無"
-
     - name: 查找並上傳 APK
-      id: find_apk
       run: |
         APK_PATH=$(find . -name "*.apk" -type f | head -n 1)
         if [ -n "$APK_PATH" ]; then
-          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
           echo "✅ 找到 APK: $APK_PATH"
           ls -lh $APK_PATH
+          mkdir -p bin
+          cp "$APK_PATH" bin/
         else
-          echo "❌ 未找到 APK 文件"
-          echo "請檢查上方的構建日誌"
+          echo "❌ 未找到 APK"
+          echo "=== bin 目錄 ==="
+          ls -la bin/ 2>/dev/null || echo "無"
+          echo "=== .buildozer 目錄 ==="
+          find .buildozer -name "*.apk" 2>/dev/null || echo "無"
           exit 1
         fi
 
     - name: 上傳 APK
-      if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: 优必选机器人控制软件
-        path: ${{ steps.find_apk.outputs.apk_path }}
-        retention-days: 30
+        name: ubtech-robot-control
+        path: bin/*.apk
+        if-no-files-found: warn
