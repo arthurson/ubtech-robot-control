@@ -2,143 +2,126 @@ name: 构建 Android APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
     
     steps:
-    - name: 獲取源代碼
-      uses: actions/checkout@v4
-
-    - name: 設置 Python 環境
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    # 验证配置文件内容
+    - name: 验证 buildozer.spec
+      run: |
+        echo "=== buildozer.spec 完整内容 ==="
+        cat buildozer.spec
+        echo "==============================="
+        echo ""
+        echo "=== requirements 行 ==="
+        grep "^requirements" buildozer.spec || echo "未找到 requirements 行"
+        echo "========================"
+    
+    - name: 设置 Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.9'
-
-    - name: 緩存 Buildozer 環境
-      uses: actions/cache@v4
-      id: buildozer-cache
-      with:
-        path: |
-          ~/.buildozer
-          .buildozer
-        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
-        restore-keys: |
-          ${{ runner.os }}-buildozer-
-
-    - name: 安裝完整系統依賴
+    
+    - name: 安装系统依赖
       run: |
-        sudo apt-get update -qq
+        sudo apt-get update
         sudo apt-get install -y \
-          build-essential git \
-          libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
-          libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
-          zlib1g-dev autoconf libtool pkg-config automake \
-          libncurses5-dev libncursesw5-dev cmake \
-          libopenjp2-7 libtiff5-dev \
-          openjdk-17-jdk zip unzip \
-          wget curl gettext
-        # Ubuntu 24.04 兼容性
-        sudo apt-get install -y libtinfo6 libtiff6 || true
-        # 確保 libtool 完整安裝
-        sudo apt-get install -y libtool-bin || true
-        echo "系統依賴安裝完成"
-
-    - name: 安裝 Python 打包工具
+          autoconf \
+          automake \
+          libtool \
+          pkg-config \
+          cmake \
+          build-essential \
+          git \
+          zip \
+          unzip \
+          openjdk-17-jdk \
+          zlib1g-dev \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libffi-dev \
+          libssl-dev \
+          python3-dev
+    
+    - name: 安装 Buildozer
       run: |
-        pip install --upgrade pip setuptools wheel
-        pip install buildozer cython pillow
-
-    - name: 創建應用圖標
+        pip install --upgrade pip
+        pip install buildozer cython
+    
+    # 清理所有缓存，强制重新读取配置
+    - name: 清理构建缓存
       run: |
-        mkdir -p assets
-        python3 -c "
-        from PIL import Image
-        img = Image.new('RGB', (512, 512), (44, 62, 80))
-        img.save('assets/icon.png')
-        img = Image.new('RGB', (512, 512), (52, 73, 94))
-        img.save('assets/presplash.png')
-        print('圖標已創建')
-        "
-
-    - name: 預先接受 Android SDK 許可證
+        rm -rf .buildozer
+        rm -rf bin
+        rm -f .buildozer.spec.lock
+    
+    # 手动创建必要的目录
+    - name: 创建目录结构
       run: |
-        mkdir -p ~/.android/licenses
-        echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > ~/.android/licenses/android-sdk-license
-        echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > ~/.android/licenses/android-sdk-preview-license
-
-    - name: 配置 buildozer.spec
+        mkdir -p .buildozer
+        mkdir -p bin
+    
+    # 确保有 main.py 入口文件
+    - name: 检查入口文件
       run: |
-        if [ ! -f "buildozer.spec" ]; then
-          buildozer init
+        if [ ! -f "main.py" ]; then
+          if [ -f "android_main.py" ]; then
+            echo "复制 android_main.py 到 main.py"
+            cp android_main.py main.py
+          else
+            echo "错误: 找不到 main.py 或 android_main.py"
+            exit 1
+          fi
         fi
-        
-        # 清除舊配置
-        sed -i '/^android.ndk/d' buildozer.spec
-        sed -i '/^android.accept_sdk_license/d' buildozer.spec
-        sed -i '/^android.api/d' buildozer.spec
-        sed -i '/^android.minapi/d' buildozer.spec
-        sed -i '/^log_level/d' buildozer.spec
-        
-        # 寫入新配置
-        echo "android.accept_sdk_license = True" >> buildozer.spec
-        echo "android.ndk = 25b" >> buildozer.spec
-        echo "android.api = 30" >> buildozer.spec
-        echo "android.minapi = 21" >> buildozer.spec
-        echo "log_level = 2" >> buildozer.spec
-        
-        # 應用名稱
-        sed -i 's/^title =.*/title = UBTechRobot/' buildozer.spec
-        sed -i 's/^package.name =.*/package.name = ubtechrobot/' buildozer.spec
-        
-        # 簡化 requirements（先測試最基礎的）
-        sed -i 's/^requirements =.*/requirements = python3,kivy/' buildozer.spec
-        
-        echo "=== buildozer.spec 配置 ==="
-        cat buildozer.spec
-
-    - name: 構建 APK
+        echo "入口文件: main.py"
+        ls -la main.py
+    
+    # 直接使用 buildozer 构建
+    - name: 构建 APK
       run: |
-        rm -f .buildozer/.lock || true
-        export JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
-        export PATH=$JAVA_HOME/bin:$PATH
-        buildozer android debug 2>&1 | tee build.log
-
-    - name: 上傳構建日誌
+        buildozer -v android debug 2>&1 | tee build_log.txt
+    
+    # 显示构建日志的最后部分
+    - name: 显示构建结果
       if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: 構建日誌
-        path: build.log
-        retention-days: 7
-
-    - name: 查找並上傳 APK
       run: |
-        echo "=== 查找 APK ==="
-        find . -name "*.apk" -type f 2>/dev/null || echo "未找到"
-        echo ""
-        echo "=== bin 目錄 ==="
-        ls -la bin/ 2>/dev/null || echo "bin 目錄不存在"
-        echo ""
-        echo "=== .buildozer 目錄結構 ==="
-        find .buildozer -type d -name "bin" 2>/dev/null | head -5
-        
-        APK_PATH=$(find . -name "*.apk" -type f | head -n 1)
-        if [ -n "$APK_PATH" ]; then
-          echo "✅ 找到 APK: $APK_PATH"
-          cp "$APK_PATH" bin/ 2>/dev/null || true
-        else
-          echo "❌ 未找到 APK"
-          exit 1
+        echo "=== 构建日志最后 100 行 ==="
+        tail -100 build_log.txt
+        echo "==========================="
+    
+    # 查找 APK
+    - name: 查找并上传 APK
+      if: success()
+      run: |
+        echo "=== 查找 APK 文件 ==="
+        find . -name "*.apk" -type f
+        if [ -d "bin" ]; then
+          ls -la bin/
         fi
-
-    - name: 上傳 APK
+      continue-on-error: true
+    
+    - name: 上传 APK
       uses: actions/upload-artifact@v4
+      if: success()
       with:
-        name: ubtech-robot-control
-        path: bin/*.apk
-        if-no-files-found: warn
+        name: ubtech-robot-apk
+        path: |
+          bin/*.apk
+          *.apk
+      continue-on-error: true
+    
+    # 如果失败，上传构建日志
+    - name: 上传构建日志
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: buildozer-log
+        path: build_log.txt
