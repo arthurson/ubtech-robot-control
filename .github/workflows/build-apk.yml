@@ -1,138 +1,148 @@
-name: Build Android APK (Fixed)
+name: 构建 Android APK
 
 on:
+  # 當你推送代碼到 main 或 master 分支時自動構建
   push:
     branches: [ main, master ]
+  # 允許你手動在 GitHub 網頁上點擊按鈕觸發構建
   workflow_dispatch:
-    inputs:
-      debug:
-        description: 'Debug build'
-        required: false
-        default: true
-        type: boolean
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    # 使用最新的 Ubuntu 穩定版，通常資源比指定 20.04 更充裕
+    runs-on: ubuntu-latest
+    # 設置超時為 2 小時，避免無限等待
     timeout-minutes: 120
     
-    env:
-      DEBIAN_FRONTEND: noninteractive
-
     steps:
-    - name: Checkout code
+    - name: 獲取源代碼
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
-    - name: Set up Python
+    - name: 設置 Python 環境
       uses: actions/setup-python@v5
       with:
         python-version: '3.9'
-        cache: 'pip'
 
-    # 緩存 Buildozer 環境，避免重複下載 SDK/NDK（這是解決卡頓的關鍵）
-    - name: Cache Buildozer
+    # ---------- 關鍵步驟：緩存 Buildozer 環境，避免每次都下載 2GB 的 SDK ----------
+    - name: 緩存 Buildozer 環境 (避免重複下載)
       uses: actions/cache@v4
-      id: cache-buildozer
+      id: buildozer-cache
       with:
         path: |
           ~/.buildozer
           .buildozer
-        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
+        # 如果 buildozer.spec 或 requirements_android.txt 有變化，則重建緩存
+        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec', 'requirements_android.txt') }}
         restore-keys: |
           ${{ runner.os }}-buildozer-
 
-    - name: Install system packages
+    - name: 安裝系統依賴包
       run: |
         sudo apt-get update -qq
         sudo apt-get install -y \
           build-essential git \
-          ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+          libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
           libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
           zlib1g-dev autoconf libtool pkg-config automake \
           libncurses5-dev libncursesw5-dev libtinfo5 cmake \
           libopenjp2-7 libtiff5 \
           openjdk-17-jdk zip unzip \
           wget curl
-        sudo apt-get clean
 
-    - name: Install Python packages
+    - name: 安裝 Python 打包工具
       run: |
-        python -m pip install --upgrade pip setuptools wheel
-        pip install buildozer==1.5.0 cython==0.29.36 pillow
+        pip install --upgrade pip setuptools wheel
+        pip install buildozer cython pillow
 
-    - name: Create assets
+    - name: 創建應用圖標 (如果項目中沒有)
       run: |
         mkdir -p assets
-        python3 << 'EOF'
+        # 如果項目沒有自帶圖標，用 Python 生成一個簡單的佔位圖標
+        python3 -c "
         from PIL import Image
-        img = Image.new('RGB', (512, 512), (44, 62, 80))
-        img.save('assets/icon.png')
-        img = Image.new('RGB', (512, 512), (52, 73, 94))
-        img.save('assets/presplash.png')
-        print("Assets created")
-        EOF
+        try:
+            img = Image.new('RGB', (512, 512), (44, 62, 80))
+            img.save('assets/icon.png')
+            img = Image.new('RGB', (512, 512), (52, 73, 94))
+            img.save('assets/presplash.png')
+            print('已生成佔位圖標')
+        except:
+            print('圖標生成失敗，但繼續')
+        "
 
-    # 修復 buildozer.spec 配置
-    - name: Fix buildozer.spec
+    # ---------- 核心：自動修復 buildozer.spec，確保非交互式構建 ----------
+    - name: 配置 buildozer.spec 以支持自動構建
       run: |
-        # 確保 spec 文件存在
+        # 如果 spec 文件不存在，則初始化一個
         if [ ! -f "buildozer.spec" ]; then
           buildozer init
         fi
         
-        # 使用 sed 修改關鍵配置，避免交互提示
-        sed -i 's/^#\?log_level =.*/log_level = 2/' buildozer.spec
+        # 自動接受 Android SDK 許可證，這是解決卡死問題的關鍵
         sed -i 's/^#\?android.accept_sdk_license =.*/android.accept_sdk_license = True/' buildozer.spec
+        
+        # 設置日誌級別為詳細，方便排查問題
+        sed -i 's/^#\?log_level =.*/log_level = 2/' buildozer.spec
+        
+        # 確保目標 Android API 版本合理
         sed -i 's/^#\?android.api =.*/android.api = 30/' buildozer.spec
         sed -i 's/^#\?android.minapi =.*/android.minapi = 21/' buildozer.spec
-        sed -i 's/^#\?android.ndk =.*/android.ndk = 23b/' buildozer.spec
-        sed -i 's/^#\?android.sdk =.*/android.sdk = 30/' buildozer.spec
         
-        # 添加必要的權限
+        # 確保啟用了必要的權限 (藍牙、網絡、麥克風)
         if ! grep -q "android.permissions" buildozer.spec; then
           echo "android.permissions = INTERNET, BLUETOOTH, BLUETOOTH_ADMIN, ACCESS_NETWORK_STATE, RECORD_AUDIO" >> buildozer.spec
         fi
         
-        echo "=== buildozer.spec 修復完成 ==="
+        echo "========== buildozer.spec 配置完成 =========="
         cat buildozer.spec
 
-    # 構建 APK - 這是核心步驟，使用非交互模式
-    - name: Build APK
+    # ---------- 正式開始構建 ----------
+    - name: 構建 APK
       run: |
-        # 清理可能殘留的鎖文件
+        # 移除可能的舊鎖文件，避免卡死
         rm -f .buildozer/.lock || true
-        
-        # 直接運行，不等待輸入
+        # 執行構建，並將所有輸出保存到日誌
         buildozer android debug 2>&1 | tee build.log
-        
-        echo "Build finished with exit code: $?"
+        echo "構建命令執行完畢，退出碼: $?"
 
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: ubtech-robot-control-apk
-        path: |
-          bin/*.apk
-          **/*.apk
-        retention-days: 30
-        if-no-files-found: warn
-
-    - name: Upload build log
-      uses: actions/upload-artifact@v4
+    - name: 上傳構建日誌 (用於調試)
       if: always()
+      uses: actions/upload-artifact@v4
       with:
-        name: build-log
+        name: 構建日誌
         path: build.log
-        retention-days: 14
+        retention-days: 7
 
-    # 顯示構建結果
-    - name: Show result
-      if: always()
+    # ---------- 查找並上傳 APK ----------
+    - name: 查找 APK 文件
+      id: find_apk
       run: |
-        echo "=== 查找 APK 文件 ==="
-        find . -name "*.apk" -type f 2>/dev/null || echo "未找到 APK"
-        echo ""
-        echo "=== bin 目錄內容 ==="
-        ls -la bin/ 2>/dev/null || echo "bin 目錄不存在"
+        # 查找所有 apk 文件
+        APK_PATH=$(find . -name "*.apk" -type f | head -n 1)
+        if [ -n "$APK_PATH" ]; then
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "找到 APK: $APK_PATH"
+          ls -lh $APK_PATH
+        else
+          echo "未找到 APK 文件，構建可能失敗"
+          exit 1
+        fi
+
+    - name: 上傳 APK 作為 Artifact (可直接下載)
+      uses: actions/upload-artifact@v4
+      with:
+        name: 优必选机器人控制软件
+        path: ${{ steps.find_apk.outputs.apk_path }}
+        retention-days: 30
+
+    # ---------- 可選：創建 GitHub Release 並上傳 APK ----------
+    - name: 創建 Release 並上傳 APK
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: "v1.0.${{ github.run_number }}"
+        name: "自動構建 v1.0.${{ github.run_number }}"
+        body: "由 GitHub Actions 自動構建的 APK 文件。"
+        files: ${{ steps.find_apk.outputs.apk_path }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
