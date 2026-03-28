@@ -28,22 +28,16 @@ jobs:
       run: |
         mkdir -p assets
         python3 -c "
-        from PIL import Image
-        img = Image.new('RGB', (512, 512), (44, 62, 80))
-        img.save('assets/icon.png')
-        img = Image.new('RGB', (512, 512), (52, 73, 94))
-        img.save('assets/presplash.png')
-        print('圖標已創建')
-        "
+from PIL import Image
+img = Image.new('RGB', (512, 512), (44, 62, 80))
+img.save('assets/icon.png')
+img = Image.new('RGB', (512, 512), (52, 73, 94))
+img.save('assets/presplash.png')
+print('圖標已創建')
+"
 
-    - name: 清理並配置 buildozer.spec
+    - name: 創建 buildozer.spec
       run: |
-        # 備份原始 spec（如果存在）
-        if [ -f "buildozer.spec" ]; then
-          cp buildozer.spec buildozer.spec.bak
-        fi
-        
-        # 創建全新的 spec 文件，避免重複配置
         cat > buildozer.spec << 'EOF'
 [app]
 
@@ -76,37 +70,25 @@ log_level = 2
 warn_on_root = 1
 EOF
         
-        # 如果存在 android_main.py 則設置入口點
         if [ -f "android_main.py" ]; then
           echo "android.entrypoint = android_main.py" >> buildozer.spec
         fi
         
-        echo ""
-        echo "========== buildozer.spec 配置完成 =========="
+        echo "========== buildozer.spec 已創建 =========="
         cat buildozer.spec
 
-    - name: 顯示項目文件結構
+    - name: 顯示項目結構
       run: |
         echo "=== 項目根目錄 ==="
         ls -la
         echo ""
-        echo "=== assets 目錄 ==="
-        ls -la assets/ || echo "無"
-        echo ""
         echo "=== 入口文件 ==="
-        if [ -f "android_main.py" ]; then
-          echo "✅ android_main.py 存在"
-        elif [ -f "main.py" ]; then
-          echo "⚠️ 使用 main.py"
-        else
-          echo "❌ 找不到入口文件"
-        fi
+        ls -la *.py 2>/dev/null || echo "無 Python 文件"
 
     - name: 構建 APK
       run: |
         echo "開始構建 APK..."
         buildozer android debug 2>&1 | tee build.log
-        echo "構建完成，退出碼: $?"
 
     - name: 上傳構建日誌
       if: always()
@@ -119,28 +101,16 @@ EOF
     - name: 查找並上傳 APK
       id: upload_apk
       run: |
-        echo "=== 查找 APK ==="
         APK_FILES=$(find . -name "*.apk" -type f 2>/dev/null)
         
         if [ -n "$APK_FILES" ]; then
           echo "✅ 找到 APK:"
           echo "$APK_FILES"
-          for apk in $APK_FILES; do
-            ls -lh "$apk"
-          done
           mkdir -p bin
-          for apk in $APK_FILES; do
-            cp "$apk" bin/
-          done
+          cp $APK_FILES bin/
           echo "apk_found=true" >> $GITHUB_OUTPUT
         else
           echo "❌ 未找到 APK"
-          echo ""
-          echo "=== bin 目錄 ==="
-          ls -la bin/ 2>/dev/null || echo "無"
-          echo ""
-          echo "=== .buildozer 目錄中的 APK ==="
-          find .buildozer -name "*.apk" 2>/dev/null || echo "無"
           echo "apk_found=false" >> $GITHUB_OUTPUT
         fi
 
@@ -151,22 +121,3 @@ EOF
         name: ubtech-robot-control
         path: bin/*.apk
         retention-days: 30
-
-    - name: 創建 GitHub Release
-      if: steps.upload_apk.outputs.apk_found == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: "v1.0.${{ github.run_number }}"
-        name: "UBTech Robot Control v1.0.${{ github.run_number }}"
-        body: "自動構建版本 - 提交: ${{ github.sha }}"
-        files: bin/*.apk
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: 構建失敗通知
-      if: steps.upload_apk.outputs.apk_found != 'true'
-      run: |
-        echo "❌ 構建失敗，請下載 build-log 查看詳細錯誤"
-        echo ""
-        echo "=== 最後 50 行日誌 ==="
-        tail -50 build.log 2>/dev/null || echo "無日誌"
