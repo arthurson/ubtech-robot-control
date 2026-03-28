@@ -1,305 +1,199 @@
 [app]
 
 # (str) Title of your application
-title = UBTech Robot Control
+title = 优必选小微控制
 
 # (str) Package name
-package.name = ubtechrobot
+package.name = ubtech_robot_control
 
 # (str) Package domain (needed for android/ios packaging)
 package.domain = org.ubtech
 
-# (str) Source code where the main.py live
+# (str) Source files where the main.py reside
 source.dir = .
 
 # (list) Source files to include (let empty to include all the files)
-source.include_exts = py,png,jpg,kv,atlas
+source.include_exts = py,png,jpg,kv,atlas,json
 
 # (list) List of inclusions using pattern matching
 #source.include_patterns = assets/*,images/*.png
 
 # (list) Source files to exclude (let empty to not exclude anything)
-source.exclude_exts = spec,pyc,pyo
-
-# (list) List of directory to exclude (let empty to not exclude anything)
-#source.exclude_dirs = tests, bin
-
-# (list) List of exclusions using pattern matching
-#source.exclude_patterns = license,images/*/.jpg
+#source.exclude_exts = spec,pyc
 
 # (str) Application versioning (method 1)
 version = 1.0.0
 
-# (str) Application versioning (method 2)
-# version.regex = __version__ = ['"](.*)['"]
-# version.filename = %(source.dir)s/main.py
-
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy,pyserial,speechrecognition,requests,pyjnius
-
-# (str) Custom source folders for requirements
-# Sets custom source for any requirements with recipes
-# requirements.source.kivy = kivy
-
-# (list) Garden requirements
-#garden_requirements =
+requirements = python3,kivy,kivymd,pyjnius,android,plyer,requests
 
 # (str) Presplash of the application
-#presplash.filename = %(source.dir)s/data/presplash.png
+presplash.filename = %(source.dir)s/assets/presplash.png
 
 # (str) Icon of the application
-#icon.filename = %(source.dir)s/data/icon.png
+icon.filename = %(source.dir)s/assets/icon.png
 
-# (str) Supported orientation (one of landscape, sensorLandscape, portrait or all)
+# (str) Supported orientation (one of 'landscape', 'portrait' or 'sensor')
 orientation = portrait
 
 # (list) List of service to declare
-#services = NAME:ENTRYPOINT_TO_PY,NAME2:ENTRYPOINT2_TO_PY
+#services = NAME:ENTRYPOINT_TO_PY,service2:ENTRYPOINT2_TO_PY
 
 #
-# OSX Specific
-#
-
-#
-# author = © Copyright Info
-
-# OSX icon and splashscreen
-#icon.filename = %(source.dir)s/data/icon.icns
-#presplash.filename = %(source.dir)s/data/presplash.png
-
-#
-# Android Specific
+# Android specific
 #
 
 # (bool) Indicate if the application should be fullscreen or not
 fullscreen = 0
 
+# (string) Presplash background color (for android toolchain)
+# Supported formats are: #RRGGBB #AARRGGBB or one of the following names:
+# red, blue, green, black, white, gray, cyan, magenta, yellow, lightgray,
+# darkgray, lightgrey, darkgrey, aquamarine, fuchsia, lime, maroon, navy,
+# olive, purple, silver, teal.
+android.presplash_color = #2C3E50
+
 # (list) Permissions
-android.permissions = INTERNET,BLUETOOTH,BLUETOOTH_ADMIN,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION,RECORD_AUDIO
+android.permissions = BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_SCAN, BLUETOOTH_CONNECT, INTERNET, RECORD_AUDIO, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE
 
-# (int) Android API to use
-android.api = 30
+# (int) Target Android API, should be as high as possible.
+android.api = 33
 
-# (int) Minimum API required
+# (int) Minimum API your APK will support.
 android.minapi = 21
 
-# (int) Android SDK version
-android.sdk = 30
-
-# (str) Android NDK version
+# (int) Android NDK version to use
 android.ndk = 25b
 
-# (list) Android architectures to build (default: armeabi-v7a, arm64-v8a, x86, x86_64)
-android.arch = arm64-v8a, armeabi-v7a
+# (int) Android SDK version to use
+android.sdk = 33
 
 # (str) Android NDK directory (if empty, it will be automatically downloaded.)
-#android.ndk_path =
+#android.ndk =
 
 # (str) Android SDK directory (if empty, it will be automatically downloaded.)
-#android.sdk_path =
+#android.sdk =
 
-# (str) ANT directory (if empty, it will be automatically downloaded.)
-#android.ant_path =
+# (str) Android entry point, default is ok for Kivy-based app
+android.entrypoint = org.kivy.android.PythonActivity
 
-# (bool) If True, then skip trying to update the Android sdk
-# This can be useful to avoid excess Internet downloads or to save time
-# when the SDK is already up to date.
-#android.skip_update = False
+# (str) Android apptheme, is available only when android.new_architecture is set to true
+# android.apptheme = "@android:style/Theme.NoTitleBar"
 
-# (bool) If True, then automatically accept SDK license
-# agreements. This is intended for automation only. If set to False,
-# the default, you will be shown the license when first running buildozer.
-android.accept_sdk_license = True
+# (list) Android architecture(s)
+android.archs = arm64-v8a,armeabi-v7a
+
+# (bool) Enables Android NDK's NEON.
+android.neon = 1
+
+# (bool) Indicates whether the screen should stay on
+# Don't forget to add the WAKE_LOCK permission if this is True
+android.wakelock = 0
+
+# (list) Android additional meta-data to add to <application> tag of AndroidManifest.xml
+#android.meta_data =
+
+# (list) Android additional libraries to unpack to libs
+android.android_additional_libs =
+
+# (bool) Indicate whether the screen should be kept on, so the backlight does not turn off
+android.keep_native_orientation_on = 0
+
+# (str) Path to a custom whitelist file
+android.whitelist =
+
+# (str) Path to a custom blacklist file
+android.blacklist =
+
+# (list) List of Android .gradle dependencies to add (using full jar path with a : followed by version)
+#android.gradle_dependencies =
+
+# (bool) Enable AndroidX support. Enable when using AndroidX libraries
+android.enable_androidx = 1
+
+# (str) The Android arch to build for, choices: armeabi-v7a, arm64-v8a, x86, x86_64
+android.arch = arm64-v8a
+
+# (int) overrides automatic version_code computation with a numeric value
+android.numeric_version = 100
+
+# (bool) indicates if the application should be compiled with .so files included
+android.use_shared_libs = 1
+
+#
+# Python for android configuration
+#
+
+# (str) The android NDK version to use
+p4a.bootstrap = sdl2
+
+# (int) Number of worker threads to use while compiling. Use 'auto' to auto-detect.
+p4a.num_jobs = auto
+
+# (str) python-for-android fork to use
+#p4a.fork =
+
+# (str) python-for-android branch to use, defaults to master
+#p4a.branch =
+
+# (str) python-for-android specific commit to use, defaults to HEAD, must be within p4a.branch
+#p4a.commit =
+
+# (str) Extra recipes to pass through to python-for-android
+#p4a.recipes =
+
+# (str) Extra patches to apply to python-for-android modules
+#p4a.patch =
+
+# (list) python-for-android arguments to use for compiling
+p4a.args =
+
+# (str) Additional parameters to pass to p4a recipes
+#p4a.extra_args =
+
+# (str) Additional p4a arguments
+#p4a.extra_args =
+
+# (str) Custom recipe folders to include
+#p4a.recipes_dir =
+
+# (str) Python version to use
+python.version = 3.9
 
 # (str) Android entry point, default is ok for Kivy-based app
 #android.entrypoint = org.kivy.android.PythonActivity
 
-# (list) Android AAR archives to add (leave empty to not add any)
-#android.add_aars =
-
-# (list) Gradle dependencies to add (leave empty to not add any)
-#android.gradle_dependencies =
-
-# (list) Java classes to add
-#android.add_src =
-
-# (str) python-for-android branch to use, defaults to stable
-#p4a.branch = stable
-
-# (list) OUYA Console framework to add
-#android.ouya.category = GAME
-#android.ouya.filename = ouya_icon.png
-
-# (str) Bootstrap mode for android (sdl2, pygame, webview, service_only)
-android.bootstrap = sdl2
-
-# (bool) If True, the graphics backend of the bootstrap (sdl2, pygame, webview) will be optimized (compiled with NEON etc.)
-android.graphics_opts = True
-
-# (bool) If True, the debug version of the bootstrap (sdl2, pygame, webview) will be used
-#android.bootstrap.debug = False
-
-# (str) If set, will be used as a version name in the Android Manifest
-#android.version_name =
-
-# (bool) If True, hides the status bar (Android)
-#android.statusbar_hide = False
-
-# (bool) If True, force the default permission to be added
-#android.default_permissions = True
-
-# (bool) Adds the permission to request the Android Activity to be hardware accelerated.
-android.hardware_accelerated = True
-
-# (list) Android logcat filters to use
-#android.logcat_filters = *:S python:D
-
-# (bool) Copy libs instead of compiling (if possible)
-#android.copy_libs = True
-
-# (str) The Android arch to build for, the default is automatically chosen.
-#android.arch = armeabi-v7a
-
-# (bool) Turn on/off the android archeological tools (deprecated)
-#android.archeological = False
-
 #
-# iOS Specific
+# Buildozer configuration
 #
 
-# (str) Path to a custom kivy-ios folder
-#ios.kivy_ios_dir = ../kivy-ios
-# Alternately, specify the URL to clone kivy-ios from:
-#ios.kivy_ios_url = https://github.com/kivy/kivy-ios
+# (str) Path to buildozer spec file
+#buildozer.spec =
 
-# (str) Path to ios SDK
-#ios.sdk_path =
+# (str) Build output directory
+buildozer.output_dir = ./bin
 
-# (str) Version of the iOS SDK to use
-#ios.sdk_version = 13.0
+# (str) Build output filename
+#buildozer.output_filename =
 
-# (str) iOS deployment target
-#ios.deployment_target = 13.0
+# (bool) If True, then buildozer will compile the debug version
+buildozer.debug = 0
 
-# (str) Xcode project file to use, if using custom xcode project
-#ios.xcode_project =
+# (bool) If True, then buildozer will compile the release version
+buildozer.release = 1
 
-# (str) Xcode project configuration to use, if using custom xcode project
-#ios.xcode_config = Debug
+# (bool) If True, then buildozer will create a signed APK
+buildozer.sign = 0
 
-# (list) iOS frameworks to add
-#ios.frameworks = libXYZ
+# (str) Path to keystore file
+buildozer.keystore =
 
-# (bool) Delete the build directory before building (clean build)
-#ios.clean_build = False
+# (str) Keystore password
+buildozer.keystore_password =
 
-# (bool) Use the bitcode when building
-#ios.bitcode = False
+# (str) Key alias
+buildozer.key_alias =
 
-# (str) Method to use to sign the app (available: certificate, ad-hoc)
-#ios.codesign.method = certificate
-
-# (str) Certificate to use to sign the app (when codesign.method == certificate)
-#ios.codesign.certificate = iPhone Developer: Me (XXXXXXXXXX)
-
-# (str) Provisioning profile to use when signing the app (when codesign.method == certificate)
-#ios.codesign.profile =
-
-# (str) When using ad-hoc signing, the name of the app
-#ios.codesign.appname =
-
-# (bool) Whether to generate or not an debug iOS symbol file
-#ios.symbols = False
-
-#
-# Windows Specific
-#
-
-# (list) Windows requirements (kivy, kivy-sdl2, etc.)
-#p4a.window_requirements =
-
-#
-# General options
-#
-
-# (str) The directory where the project file lives
-#build_dir = ./.buildozer
-
-# (str) The directory where distributions will be stored
-#dist_dir = ./bin
-
-# (str) The name of the distribution to use
-#target_name = ubtechrobot
-
-# (str) The android logcat log level (default: 2)
-#android.log_level = 2
-
-# (bool) Turn on/off the debug mode of buildozer (default: False)
-#buildozer.debug = False
-
-# (str) The path to the android debug bridge (adb)
-#android.adb = adb
-
-# (str) The path to the android emulator
-#android.emulator = emulator
-
-# (str) The command to run the emulator (default: emulator)
-#android.emulator_cmd = emulator
-
-# (bool) Turn on/off the Android emulator
-#android.emulator = False
-
-# (str) The Android AVD to use (if android.emulator = True)
-#android.avd =
-
-# (bool) Whether to use the GPU with the Android emulator (if android.emulator = True)
-#android.emulator_gpu = False
-
-# (bool) Turn on/off the Android device
-#android.device = False
-
-# (str) The ADB device serial number to use (if android.device = True)
-#android.device_serial =
-
-# (bool) Whether to automatically accept the Android SDK license
-#android.accept_sdk_license = True
-
-# (list) The targets to build, choices: android, ios, windows
-#targets = android
-
-# (str) The log level for buildozer (default: 1)
-log_level = 2
-
-# (str) The folder to store the buildozer logs
-#buildozer.log_dir = ./.buildozer/logs
-
-# (bool) Whether to run the application on the device (if android.device = True)
-#android.run = False
-
-# (bool) Whether to run the application on the emulator (if android.emulator = True)
-#android.run_emulator = False
-
-# (bool) Whether to copy the application to the device (if android.device = True)
-#android.copy_to_device = False
-
-# (bool) Whether to install the application on the device (if android.device = True)
-#android.install = False
-
-# (str) The log level for the Android logcat (default: V)
-#android.logcat_level = V
-
-# (list) The Android logcat filters to use
-#android.logcat_filters = *:S python:D
-
-# (str) The path to the Android logcat output file (if empty, output to stdout)
-#android.logcat_output =
-
-# (str) The path to the Android logcat error output file (if empty, output to stderr)
-#android.logcat_error_output =
-
-# (bool) Whether to show the Android logcat output (default: True)
-#android.logcat_show = True
-
-# (bool) Whether to clear the Android logcat before starting (default: False)
-#android.logcat_clear = False
+# (str) Key password
+buildozer.key_password =
