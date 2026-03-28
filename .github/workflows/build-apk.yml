@@ -21,6 +21,10 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: 安裝 Pillow
+      run: |
+        pip install pillow
+
     - name: 創建應用圖標
       run: |
         mkdir -p assets
@@ -66,8 +70,8 @@ jobs:
         # 設置源文件擴展名
         sed -i 's/^#\?source.include_exts =.*/source.include_exts = py,png,jpg,kv,atlas/' buildozer.spec
         
-        # 設置 requirements（包含所有原始功能需要的庫）
-        sed -i 's/^#\?requirements =.*/requirements = python3,kivy==2.2.1,kivymd,pyjnius,android,plyer,requests,pyserial,pybluez,speechrecognition,pyaudio/' buildozer.spec
+        # 設置 requirements（簡化版本，先確保能構建）
+        sed -i 's/^#\?requirements =.*/requirements = python3,kivy/' buildozer.spec
         
         # 指定 Android 入口文件
         if [ -f "android_main.py" ]; then
@@ -180,8 +184,3 @@ jobs:
         echo "❌ 構建失敗"
         echo ""
         echo "請下載 build-log artifact 查看詳細錯誤信息"
-        echo ""
-        echo "常見問題排查:"
-        echo "1. 檢查 requirements 中的庫是否支持 Android"
-        echo "2. 確認 android_main.py 或 main.py 存在"
-        echo "3. 查看日誌中的 [ERROR] 信息"
