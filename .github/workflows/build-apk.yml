@@ -30,7 +30,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-buildozer-
 
-    - name: 安裝系統依賴包
+    - name: 安裝完整系統依賴
       run: |
         sudo apt-get update -qq
         sudo apt-get install -y \
@@ -39,10 +39,14 @@ jobs:
           libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
           zlib1g-dev autoconf libtool pkg-config automake \
           libncurses5-dev libncursesw5-dev cmake \
-          libopenjp2-7 \
+          libopenjp2-7 libtiff5-dev \
           openjdk-17-jdk zip unzip \
-          wget curl
+          wget curl gettext
+        # Ubuntu 24.04 兼容性
         sudo apt-get install -y libtinfo6 libtiff6 || true
+        # 確保 libtool 完整安裝
+        sudo apt-get install -y libtool-bin || true
+        echo "系統依賴安裝完成"
 
     - name: 安裝 Python 打包工具
       run: |
@@ -66,54 +70,42 @@ jobs:
         mkdir -p ~/.android/licenses
         echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > ~/.android/licenses/android-sdk-license
         echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > ~/.android/licenses/android-sdk-preview-license
-        echo "84831b9409646a918e30573bab4c9c91346d8abd" > ~/.android/licenses/google-gdk-license
 
-    - name: 配置 buildozer.spec (關鍵修復)
+    - name: 配置 buildozer.spec
       run: |
-        # 如果沒有 spec 文件則創建
         if [ ! -f "buildozer.spec" ]; then
           buildozer init
         fi
         
-        # 清除舊的 NDK 配置
+        # 清除舊配置
         sed -i '/^android.ndk/d' buildozer.spec
-        
-        # 使用 NDK 25b（最低要求版本）
-        echo "android.ndk = 25b" >> buildozer.spec
-        
-        # 確保許可證接受
         sed -i '/^android.accept_sdk_license/d' buildozer.spec
-        echo "android.accept_sdk_license = True" >> buildozer.spec
-        
-        # API 版本設置
         sed -i '/^android.api/d' buildozer.spec
         sed -i '/^android.minapi/d' buildozer.spec
+        sed -i '/^log_level/d' buildozer.spec
+        
+        # 寫入新配置
+        echo "android.accept_sdk_license = True" >> buildozer.spec
+        echo "android.ndk = 25b" >> buildozer.spec
         echo "android.api = 30" >> buildozer.spec
         echo "android.minapi = 21" >> buildozer.spec
-        
-        # 日誌級別
-        sed -i '/^log_level/d' buildozer.spec
         echo "log_level = 2" >> buildozer.spec
         
-        # 應用名稱（避免中文問題）
+        # 應用名稱
         sed -i 's/^title =.*/title = UBTechRobot/' buildozer.spec
         sed -i 's/^package.name =.*/package.name = ubtechrobot/' buildozer.spec
         
-        # 添加權限
-        if ! grep -q "android.permissions" buildozer.spec; then
-          echo "android.permissions = INTERNET, BLUETOOTH, BLUETOOTH_ADMIN, ACCESS_NETWORK_STATE, RECORD_AUDIO" >> buildozer.spec
-        fi
+        # 簡化 requirements（先測試最基礎的）
+        sed -i 's/^requirements =.*/requirements = python3,kivy/' buildozer.spec
         
-        echo "========== buildozer.spec 配置 =========="
+        echo "=== buildozer.spec 配置 ==="
         cat buildozer.spec
 
     - name: 構建 APK
       run: |
         rm -f .buildozer/.lock || true
-        # 設置環境變量
         export JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
         export PATH=$JAVA_HOME/bin:$PATH
-        # 構建
         buildozer android debug 2>&1 | tee build.log
 
     - name: 上傳構建日誌
@@ -126,18 +118,21 @@ jobs:
 
     - name: 查找並上傳 APK
       run: |
+        echo "=== 查找 APK ==="
+        find . -name "*.apk" -type f 2>/dev/null || echo "未找到"
+        echo ""
+        echo "=== bin 目錄 ==="
+        ls -la bin/ 2>/dev/null || echo "bin 目錄不存在"
+        echo ""
+        echo "=== .buildozer 目錄結構 ==="
+        find .buildozer -type d -name "bin" 2>/dev/null | head -5
+        
         APK_PATH=$(find . -name "*.apk" -type f | head -n 1)
         if [ -n "$APK_PATH" ]; then
           echo "✅ 找到 APK: $APK_PATH"
-          ls -lh $APK_PATH
-          mkdir -p bin
-          cp "$APK_PATH" bin/
+          cp "$APK_PATH" bin/ 2>/dev/null || true
         else
           echo "❌ 未找到 APK"
-          echo "=== bin 目錄 ==="
-          ls -la bin/ 2>/dev/null || echo "無"
-          echo "=== .buildozer 目錄 ==="
-          find .buildozer -name "*.apk" 2>/dev/null || echo "無"
           exit 1
         fi
 
