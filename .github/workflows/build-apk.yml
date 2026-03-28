@@ -52,35 +52,45 @@ jobs:
         pip install --upgrade pip
         pip install buildozer cython
     
-    # 关键：手动安装 Android SDK build-tools
+    # 手动安装 Android SDK - 使用 Buildozer 期望的路径结构
     - name: 安装 Android SDK Build Tools
       run: |
-        # 创建 SDK 目录
+        # 创建 Buildozer 期望的目录结构
         mkdir -p /home/runner/.buildozer/android/platform/android-sdk
         
-        # 使用 sdkmanager 安装 build-tools
-        export ANDROID_HOME=/home/runner/.buildozer/android/platform/android-sdk
-        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/tools/bin
-        
-        # 下载 command line tools
         cd /home/runner/.buildozer/android/platform
+        
+        # 下载 Android command line tools
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
         unzip -q commandlinetools-linux-9477386_latest.zip
-        mkdir -p android-sdk/cmdline-tools
-        mv cmdline-tools android-sdk/cmdline-tools/latest
         
-        # 设置环境变量并安装 build-tools
+        # 关键：创建 Buildozer 期望的 tools 目录结构
+        # Buildozer 期望: android-sdk/tools/bin/sdkmanager
+        mkdir -p android-sdk/tools
+        cp -r cmdline-tools/* android-sdk/tools/
+        
+        # 设置环境变量
         export ANDROID_HOME=/home/runner/.buildozer/android/platform/android-sdk
-        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+        export PATH=$ANDROID_HOME/tools/bin:$PATH
         
         # 接受许可证
         yes | sdkmanager --licenses > /dev/null 2>&1 || true
         
-        # 安装 build-tools (版本 30.0.3 是 Android API 30 对应的)
-        sdkmanager "build-tools;30.0.3" "platforms;android-30"
+        # 安装必要的组件
+        sdkmanager "platform-tools" "platforms;android-30" "build-tools;30.0.3"
         
-        echo "Build tools 安装完成"
-        ls -la $ANDROID_HOME/build-tools/
+        echo "SDK 安装完成"
+        echo "检查 sdkmanager 位置:"
+        ls -la $ANDROID_HOME/tools/bin/sdkmanager || echo "sdkmanager 未找到"
+        echo "检查 build-tools:"
+        ls -la $ANDROID_HOME/build-tools/ || echo "build-tools 未找到"
+    
+    # 设置环境变量供后续步骤使用
+    - name: 设置 Android 环境变量
+      run: |
+        echo "ANDROID_HOME=/home/runner/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
+        echo "ANDROIDSDK=/home/runner/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
+        echo "PATH=$PATH:/home/runner/.buildozer/android/platform/android-sdk/tools/bin" >> $GITHUB_ENV
     
     # 清理缓存
     - name: 清理构建缓存
@@ -100,6 +110,7 @@ jobs:
             exit 1
           fi
         fi
+        echo "入口文件存在: main.py"
     
     # 构建 APK
     - name: 构建 APK
