@@ -10,114 +10,135 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     
-    container:
-      image: kivy/buildozer:latest
-      options: --user root
-
     steps:
     - name: 獲取源代碼
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
-    - name: 安裝 Pillow
+    - name: 設置 Python 環境
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: 緩存 Buildozer 環境
+      uses: actions/cache@v4
+      id: buildozer-cache
+      with:
+        path: |
+          ~/.buildozer
+          .buildozer
+        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
+        restore-keys: |
+          ${{ runner.os }}-buildozer-
+
+    - name: 安裝完整系統依賴
       run: |
-        pip install pillow
+        sudo apt-get update -qq
+        sudo apt-get install -y \
+          build-essential git \
+          libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+          libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
+          zlib1g-dev autoconf libtool pkg-config automake \
+          libncurses5-dev libncursesw5-dev cmake \
+          libopenjp2-7 libtiff5-dev \
+          openjdk-17-jdk zip unzip \
+          wget curl gettext
+        # Ubuntu 24.04 兼容性
+        sudo apt-get install -y libtinfo6 libtiff6 || true
+        # 確保 libtool 完整安裝
+        sudo apt-get install -y libtool-bin || true
+        echo "系統依賴安裝完成"
+
+    - name: 安裝 Python 打包工具
+      run: |
+        pip install --upgrade pip setuptools wheel
+        pip install buildozer cython pillow
 
     - name: 創建應用圖標
       run: |
         mkdir -p assets
         python3 -c "
-from PIL import Image
-img = Image.new('RGB', (512, 512), (44, 62, 80))
-img.save('assets/icon.png')
-img = Image.new('RGB', (512, 512), (52, 73, 94))
-img.save('assets/presplash.png')
-print('圖標已創建')
-"
+        from PIL import Image
+        img = Image.new('RGB', (512, 512), (44, 62, 80))
+        img.save('assets/icon.png')
+        img = Image.new('RGB', (512, 512), (52, 73, 94))
+        img.save('assets/presplash.png')
+        print('圖標已創建')
+        "
 
-    - name: 創建 buildozer.spec
+    - name: 預先接受 Android SDK 許可證
       run: |
-        cat > buildozer.spec << 'EOF'
-[app]
+        mkdir -p ~/.android/licenses
+        echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > ~/.android/licenses/android-sdk-license
+        echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > ~/.android/licenses/android-sdk-preview-license
 
-title = UBTechRobot
-package.name = ubtechrobot
-package.domain = org.ubtech
-
-source.dir = .
-source.include_exts = py,png,jpg,kv,atlas
-version = 1.0.0
-requirements = python3,kivy
-
-orientation = portrait
-osx.python_version = 3
-osx.kivy_version = 2.2.1
-fullscreen = 0
-
-android.accept_sdk_license = True
-android.ndk = 25b
-android.api = 30
-android.minapi = 21
-android.permissions = INTERNET, BLUETOOTH, BLUETOOTH_ADMIN, ACCESS_NETWORK_STATE, RECORD_AUDIO
-
-log_level = 2
-warn_on_root = 0
-
-[buildozer]
-
-log_level = 2
-warn_on_root = 1
-EOF
-        
-        if [ -f "android_main.py" ]; then
-          echo "android.entrypoint = android_main.py" >> buildozer.spec
+    - name: 配置 buildozer.spec
+      run: |
+        if [ ! -f "buildozer.spec" ]; then
+          buildozer init
         fi
         
-        echo "========== buildozer.spec 已創建 =========="
+        # 清除舊配置
+        sed -i '/^android.ndk/d' buildozer.spec
+        sed -i '/^android.accept_sdk_license/d' buildozer.spec
+        sed -i '/^android.api/d' buildozer.spec
+        sed -i '/^android.minapi/d' buildozer.spec
+        sed -i '/^log_level/d' buildozer.spec
+        
+        # 寫入新配置
+        echo "android.accept_sdk_license = True" >> buildozer.spec
+        echo "android.ndk = 25b" >> buildozer.spec
+        echo "android.api = 30" >> buildozer.spec
+        echo "android.minapi = 21" >> buildozer.spec
+        echo "log_level = 2" >> buildozer.spec
+        
+        # 應用名稱
+        sed -i 's/^title =.*/title = UBTechRobot/' buildozer.spec
+        sed -i 's/^package.name =.*/package.name = ubtechrobot/' buildozer.spec
+        
+        # 簡化 requirements（先測試最基礎的）
+        sed -i 's/^requirements =.*/requirements = python3,kivy/' buildozer.spec
+        
+        echo "=== buildozer.spec 配置 ==="
         cat buildozer.spec
-
-    - name: 顯示項目結構
-      run: |
-        echo "=== 項目根目錄 ==="
-        ls -la
-        echo ""
-        echo "=== 入口文件 ==="
-        ls -la *.py 2>/dev/null || echo "無 Python 文件"
 
     - name: 構建 APK
       run: |
-        echo "開始構建 APK..."
+        rm -f .buildozer/.lock || true
+        export JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
+        export PATH=$JAVA_HOME/bin:$PATH
         buildozer android debug 2>&1 | tee build.log
 
     - name: 上傳構建日誌
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: build-log
+        name: 構建日誌
         path: build.log
         retention-days: 7
 
     - name: 查找並上傳 APK
-      id: upload_apk
       run: |
-        APK_FILES=$(find . -name "*.apk" -type f 2>/dev/null)
+        echo "=== 查找 APK ==="
+        find . -name "*.apk" -type f 2>/dev/null || echo "未找到"
+        echo ""
+        echo "=== bin 目錄 ==="
+        ls -la bin/ 2>/dev/null || echo "bin 目錄不存在"
+        echo ""
+        echo "=== .buildozer 目錄結構 ==="
+        find .buildozer -type d -name "bin" 2>/dev/null | head -5
         
-        if [ -n "$APK_FILES" ]; then
-          echo "✅ 找到 APK:"
-          echo "$APK_FILES"
-          mkdir -p bin
-          cp $APK_FILES bin/
-          echo "apk_found=true" >> $GITHUB_OUTPUT
+        APK_PATH=$(find . -name "*.apk" -type f | head -n 1)
+        if [ -n "$APK_PATH" ]; then
+          echo "✅ 找到 APK: $APK_PATH"
+          cp "$APK_PATH" bin/ 2>/dev/null || true
         else
           echo "❌ 未找到 APK"
-          echo "apk_found=false" >> $GITHUB_OUTPUT
+          exit 1
         fi
 
     - name: 上傳 APK
-      if: steps.upload_apk.outputs.apk_found == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: ubtech-robot-control
         path: bin/*.apk
-        retention-days: 30
+        if-no-files-found: warn
