@@ -1,17 +1,13 @@
 name: 构建 Android APK
 
 on:
-  # 當你推送代碼到 main 或 master 分支時自動構建
   push:
     branches: [ main, master ]
-  # 允許你手動在 GitHub 網頁上點擊按鈕觸發構建
   workflow_dispatch:
 
 jobs:
   build:
-    # 使用最新的 Ubuntu 穩定版，通常資源比指定 20.04 更充裕
     runs-on: ubuntu-latest
-    # 設置超時為 2 小時，避免無限等待
     timeout-minutes: 120
     
     steps:
@@ -23,15 +19,13 @@ jobs:
       with:
         python-version: '3.9'
 
-    # ---------- 關鍵步驟：緩存 Buildozer 環境，避免每次都下載 2GB 的 SDK ----------
-    - name: 緩存 Buildozer 環境 (避免重複下載)
+    - name: 緩存 Buildozer 環境
       uses: actions/cache@v4
       id: buildozer-cache
       with:
         path: |
           ~/.buildozer
           .buildozer
-        # 如果 buildozer.spec 或 requirements_android.txt 有變化，則重建緩存
         key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec', 'requirements_android.txt') }}
         restore-keys: |
           ${{ runner.os }}-buildozer-
@@ -44,20 +38,22 @@ jobs:
           libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
           libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
           zlib1g-dev autoconf libtool pkg-config automake \
-          libncurses5-dev libncursesw5-dev libtinfo5 cmake \
-          libopenjp2-7 libtiff5 \
+          libncurses5-dev libncursesw5-dev cmake \
+          libopenjp2-7 \
           openjdk-17-jdk zip unzip \
           wget curl
+        # Ubuntu 24.04 兼容性處理
+        sudo apt-get install -y libtinfo6 libtiff6 || true
+        echo "系統依賴安裝完成"
 
     - name: 安裝 Python 打包工具
       run: |
         pip install --upgrade pip setuptools wheel
         pip install buildozer cython pillow
 
-    - name: 創建應用圖標 (如果項目中沒有)
+    - name: 創建應用圖標
       run: |
         mkdir -p assets
-        # 如果項目沒有自帶圖標，用 Python 生成一個簡單的佔位圖標
         python3 -c "
         from PIL import Image
         try:
@@ -70,42 +66,30 @@ jobs:
             print('圖標生成失敗，但繼續')
         "
 
-    # ---------- 核心：自動修復 buildozer.spec，確保非交互式構建 ----------
-    - name: 配置 buildozer.spec 以支持自動構建
+    - name: 配置 buildozer.spec
       run: |
-        # 如果 spec 文件不存在，則初始化一個
         if [ ! -f "buildozer.spec" ]; then
           buildozer init
         fi
         
-        # 自動接受 Android SDK 許可證，這是解決卡死問題的關鍵
         sed -i 's/^#\?android.accept_sdk_license =.*/android.accept_sdk_license = True/' buildozer.spec
-        
-        # 設置日誌級別為詳細，方便排查問題
         sed -i 's/^#\?log_level =.*/log_level = 2/' buildozer.spec
-        
-        # 確保目標 Android API 版本合理
         sed -i 's/^#\?android.api =.*/android.api = 30/' buildozer.spec
         sed -i 's/^#\?android.minapi =.*/android.minapi = 21/' buildozer.spec
         
-        # 確保啟用了必要的權限 (藍牙、網絡、麥克風)
         if ! grep -q "android.permissions" buildozer.spec; then
           echo "android.permissions = INTERNET, BLUETOOTH, BLUETOOTH_ADMIN, ACCESS_NETWORK_STATE, RECORD_AUDIO" >> buildozer.spec
         fi
         
         echo "========== buildozer.spec 配置完成 =========="
-        cat buildozer.spec
 
-    # ---------- 正式開始構建 ----------
     - name: 構建 APK
       run: |
-        # 移除可能的舊鎖文件，避免卡死
         rm -f .buildozer/.lock || true
-        # 執行構建，並將所有輸出保存到日誌
         buildozer android debug 2>&1 | tee build.log
         echo "構建命令執行完畢，退出碼: $?"
 
-    - name: 上傳構建日誌 (用於調試)
+    - name: 上傳構建日誌
       if: always()
       uses: actions/upload-artifact@v4
       with:
@@ -113,30 +97,27 @@ jobs:
         path: build.log
         retention-days: 7
 
-    # ---------- 查找並上傳 APK ----------
     - name: 查找 APK 文件
       id: find_apk
       run: |
-        # 查找所有 apk 文件
         APK_PATH=$(find . -name "*.apk" -type f | head -n 1)
         if [ -n "$APK_PATH" ]; then
           echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
           echo "找到 APK: $APK_PATH"
           ls -lh $APK_PATH
         else
-          echo "未找到 APK 文件，構建可能失敗"
+          echo "未找到 APK 文件"
           exit 1
         fi
 
-    - name: 上傳 APK 作為 Artifact (可直接下載)
+    - name: 上傳 APK
       uses: actions/upload-artifact@v4
       with:
         name: 优必选机器人控制软件
         path: ${{ steps.find_apk.outputs.apk_path }}
         retention-days: 30
 
-    # ---------- 可選：創建 GitHub Release 並上傳 APK ----------
-    - name: 創建 Release 並上傳 APK
+    - name: 創建 Release
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
       uses: softprops/action-gh-release@v1
       with:
