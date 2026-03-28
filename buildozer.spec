@@ -1,199 +1,181 @@
 [app]
 
-# (str) Title of your application
-title = 优必选小微控制
-
-# (str) Package name
-package.name = ubtech_robot_control
-
-# (str) Package domain (needed for android/ios packaging)
+# 应用基本信息
+title = 优必选小微机器人控制软件
+package.name = ubtechrobot
 package.domain = org.ubtech
 
-# (str) Source files where the main.py reside
-source.dir = .
+# 应用版本
+version.regex = __version__ = ['"](.*)['"]
+version.filename = %(source.dir)s/main.py
 
-# (list) Source files to include (let empty to include all the files)
-source.include_exts = py,png,jpg,kv,atlas,json
+# 应用图标（如果有图标文件可以取消注释）
+# icon.filename = %(source.dir)s/icon.png
+# icon.filename = %(source.dir)s/icon-android.png
 
-# (list) List of inclusions using pattern matching
-#source.include_patterns = assets/*,images/*.png
+# 支持的架构
+android.arch = armeabi-v7a, arm64-v8a
 
-# (list) Source files to exclude (let empty to not exclude anything)
-#source.exclude_exts = spec,pyc
+# Android API级别
+android.api = 30
+android.minapi = 21
+android.ndk = 25b
+android.sdk = 30
 
-# (str) Application versioning (method 1)
+# 核心依赖 - 优化版本，避免编译问题
+requirements = python3==3.9.25,kivy==2.3.0,kivymd==1.1.1,pySerial==3.5,speechrecognition==3.10.1,requests==2.31.0,pyjnius==1.5.0,openssl
+
+# 注意：pyaudio 和 matplotlib 在Android上容易编译失败，暂时移除
+# 如果需要语音功能，建议使用Android原生API通过pyjnius实现
+# 如果需要图表功能，考虑使用其他轻量级方案
+
+# Android权限
+android.permissions = INTERNET,BLUETOOTH,BLUETOOTH_ADMIN,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION,RECORD_AUDIO,ACCESS_NETWORK_STATE,WAKE_LOCK,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
+
+# Android特性
+android.features = android.hardware.bluetooth,android.hardware.bluetooth_le,android.hardware.microphone
+
+# Gradle依赖
+android.gradle_dependencies = 'com.android.support:appcompat-v7:28.0.0','com.android.support:support-v4:28.0.0'
+
+# 添加Android支持库
+android.add_src = yes
+android.whitelist = yes
+
+# 服务声明（如果需要后台服务）
+# android.services = YourService:your.service.Class
+
+# 应用启动器
+android.entrypoint = org.kivy.android.PythonActivity
+android.fullscreen = 0
+
+# 应用方向（0=自动, 1=竖屏, 2=横屏）
+android.orientation = 1
+
+# 应用主题
+android.window_background_color = #FFFFFF
+android.bootstrap = sdl2
+
+# 资源文件
+android.extra_java_dirs = 
+android.add_services = 
+android.add_authorities = 
+
+# 应用元数据
+android.meta_data = 
+
+# 应用图标（如果有）
+# android.icon = %(source.dir)s/icon.png
+# android.presplash = %(source.dir)s/splash.png
+
+# 包含的文件和排除规则
+source.include_exts = py,png,jpg,kv,atlas,json,ttf,txt,md,ini
+source.exclude_exts = spec,pyc,pyo,pyd,db,db3,so,o,os,DS_Store,git,pyproject
+source.include_patterns = 
+source.exclude_patterns = .git,.buildozer,__pycache__,*.pyc,*.pyo,*.so,*.db,*.db3,*.o,*.os,*.DS_Store
+
+# 版本文件
 version = 1.0.0
 
-# (list) Application requirements
-# comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy,kivymd,pyjnius,android,plyer,requests
-
-# (str) Presplash of the application
-presplash.filename = %(source.dir)s/assets/presplash.png
-
-# (str) Icon of the application
-icon.filename = %(source.dir)s/assets/icon.png
-
-# (str) Supported orientation (one of 'landscape', 'portrait' or 'sensor')
-orientation = portrait
-
-# (list) List of service to declare
-#services = NAME:ENTRYPOINT_TO_PY,service2:ENTRYPOINT2_TO_PY
-
-#
-# Android specific
-#
-
-# (bool) Indicate if the application should be fullscreen or not
+# 应用名称（不同平台）
 fullscreen = 0
 
-# (string) Presplash background color (for android toolchain)
-# Supported formats are: #RRGGBB #AARRGGBB or one of the following names:
-# red, blue, green, black, white, gray, cyan, magenta, yellow, lightgray,
-# darkgray, lightgrey, darkgrey, aquamarine, fuchsia, lime, maroon, navy,
-# olive, purple, silver, teal.
-android.presplash_color = #2C3E50
+# 应用标题
+title = 优必选小微机器人控制软件
 
-# (list) Permissions
-android.permissions = BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_SCAN, BLUETOOTH_CONNECT, INTERNET, RECORD_AUDIO, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE
+# 应用描述
+description = 优必选小微机器人综合控制平台，支持运动控制、语音交互、编程教学和远程监控功能
 
-# (int) Target Android API, should be as high as possible.
-android.api = 33
+# 作者信息
+author = Arthur Son
 
-# (int) Minimum API your APK will support.
-android.minapi = 21
+# 应用类别
+category = Education
 
-# (int) Android NDK version to use
-android.ndk = 25b
+# 应用网址
+# url = https://your-website.com
 
-# (int) Android SDK version to use
-android.sdk = 33
+# 应用图标（Windows）
+# icon = %(source.dir)s/icon.ico
 
-# (str) Android NDK directory (if empty, it will be automatically downloaded.)
-#android.ndk =
+# 其他平台设置
+# ios.codesign.debug = 
+# ios.codesign.release = 
+# ios.codesign.framework = 
 
-# (str) Android SDK directory (if empty, it will be automatically downloaded.)
-#android.sdk =
+# OS X设置
+# osx.icon = 
+# osx.kivy_ios = 
+# osx.bundle_identifier = 
 
-# (str) Android entry point, default is ok for Kivy-based app
-android.entrypoint = org.kivy.android.PythonActivity
+# 构建优化
+# 跳过某些不必要的检查
+p4a.branch = develop
+p4a.local_recipes = 
+p4a.hook = 
 
-# (str) Android apptheme, is available only when android.new_architecture is set to true
-# android.apptheme = "@android:style/Theme.NoTitleBar"
+# 日志级别（设置为2以便调试）
+log_level = 2
 
-# (list) Android architecture(s)
-android.archs = arm64-v8a,armeabi-v7a
+# 警告抑制
+warn_on_root = 0
 
-# (bool) Enables Android NDK's NEON.
-android.neon = 1
+# 交叉编译设置
+# 确保编译时不因缺少某些库而失败
+ignore_setup_py = yes
 
-# (bool) Indicates whether the screen should stay on
-# Don't forget to add the WAKE_LOCK permission if this is True
-android.wakelock = 0
+# 调试符号
+debug = 1
 
-# (list) Android additional meta-data to add to <application> tag of AndroidManifest.xml
-#android.meta_data =
+# 构建目录
+build_dir = %(source.dir)s/.buildozer
 
-# (list) Android additional libraries to unpack to libs
-android.android_additional_libs =
+# 分发目录
+dist_dir = %(source.dir)s/bin
 
-# (bool) Indicate whether the screen should be kept on, so the backlight does not turn off
-android.keep_native_orientation_on = 0
+# 签名配置（生产环境需要配置）
+# android.release_keystore = 
+# android.release_keystore_alias = 
+# android.release_keystore_password = 
 
-# (str) Path to a custom whitelist file
-android.whitelist =
+[buildozer]
 
-# (str) Path to a custom blacklist file
-android.blacklist =
+# 日志级别
+log_level = 2
 
-# (list) List of Android .gradle dependencies to add (using full jar path with a : followed by version)
-#android.gradle_dependencies =
+# 警告抑制
+warn_on_root = 0
 
-# (bool) Enable AndroidX support. Enable when using AndroidX libraries
-android.enable_androidx = 1
+# 路径设置
+buildozer_dir = %(user)s/.buildozer
+bin_dir = %(source.dir)s/bin
 
-# (str) The Android arch to build for, choices: armeabi-v7a, arm64-v8a, x86, x86_64
-android.arch = arm64-v8a
+# Android SDK/NDK路径（使用环境变量或自动检测）
+android.accept_sdk_license = True
+android.ndk_path = 
+android.sdk_path = 
+android.ant_path = 
 
-# (int) overrides automatic version_code computation with a numeric value
-android.numeric_version = 100
+# 使用缓存
+cache = True
 
-# (bool) indicates if the application should be compiled with .so files included
-android.use_shared_libs = 1
+# 更新设置
+update = False
 
-#
-# Python for android configuration
-#
+# 调试模式
+debug = 1
 
-# (str) The android NDK version to use
-p4a.bootstrap = sdl2
+# 设备连接
+# android.logcat_filters = *:S python:D
+# android.adb = 
 
-# (int) Number of worker threads to use while compiling. Use 'auto' to auto-detect.
-p4a.num_jobs = auto
+# iOS设置
+# ios.skip_xcodebuild = 
+# ios.xcode_version = 
+# ios.codesign_identity = 
+# ios.provisioning_profile = 
 
-# (str) python-for-android fork to use
-#p4a.fork =
-
-# (str) python-for-android branch to use, defaults to master
-#p4a.branch =
-
-# (str) python-for-android specific commit to use, defaults to HEAD, must be within p4a.branch
-#p4a.commit =
-
-# (str) Extra recipes to pass through to python-for-android
-#p4a.recipes =
-
-# (str) Extra patches to apply to python-for-android modules
-#p4a.patch =
-
-# (list) python-for-android arguments to use for compiling
-p4a.args =
-
-# (str) Additional parameters to pass to p4a recipes
-#p4a.extra_args =
-
-# (str) Additional p4a arguments
-#p4a.extra_args =
-
-# (str) Custom recipe folders to include
-#p4a.recipes_dir =
-
-# (str) Python version to use
-python.version = 3.9
-
-# (str) Android entry point, default is ok for Kivy-based app
-#android.entrypoint = org.kivy.android.PythonActivity
-
-#
-# Buildozer configuration
-#
-
-# (str) Path to buildozer spec file
-#buildozer.spec =
-
-# (str) Build output directory
-buildozer.output_dir = ./bin
-
-# (str) Build output filename
-#buildozer.output_filename =
-
-# (bool) If True, then buildozer will compile the debug version
-buildozer.debug = 0
-
-# (bool) If True, then buildozer will compile the release version
-buildozer.release = 1
-
-# (bool) If True, then buildozer will create a signed APK
-buildozer.sign = 0
-
-# (str) Path to keystore file
-buildozer.keystore =
-
-# (str) Keystore password
-buildozer.keystore_password =
-
-# (str) Key alias
-buildozer.key_alias =
-
-# (str) Key password
-buildozer.key_password =
+# 其他平台
+# p4a.branch = 
+# p4a.local_recipes = 
+# p4a.hook = 
